@@ -6,19 +6,27 @@
 (() => {
 "use strict";
 const CFG = Object.assign({ googleClientId: "", model: "gemini-3.5-flash-lite", fallbackModel: "gemini-3.1-flash-lite", syncDelayMs: 20000, version: "1" }, window.KOSHELEK_CONFIG || {});
-const ls = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, del(k) { try { localStorage.removeItem(k); } catch (e) { } } };
+let _lg, _ls, _ld; try { _lg = Storage.prototype.getItem; _ls = Storage.prototype.setItem; _ld = Storage.prototype.removeItem; } catch (e) { }
+const ls = { get(k) { try { return _lg.call(localStorage, k); } catch (e) { return null; } }, set(k, v) { try { _ls.call(localStorage, k, v); } catch (e) { } }, del(k) { try { _ld.call(localStorage, k); } catch (e) { } } };
+/* пользователи: у каждого свои IndexedDB, ключ ИИ, слоты на Диске и localStorage аппа; p1 — прежние данные без суффиксов */
+const PROF = (() => { let list = null; try { list = JSON.parse(ls.get("kw_profiles") || "null"); } catch (e) { } if (!Array.isArray(list) || !list.length) list = [{ id: "p1", name: "Основной" }]; let act = ls.get("kw_active"); if (!list.some(p => p.id === act)) act = list[0].id; return { list, act }; })();
+const pid = PROF.act, sfx = pid === "p1" ? "" : "-" + pid;
+const lk = k => pid === "p1" ? k : k + ":" + pid;
+const saveProf = () => { ls.set("kw_profiles", JSON.stringify(PROF.list)); ls.set("kw_active", PROF.act); };
+const curProf = () => PROF.list.find(p => p.id === pid) || PROF.list[0];
+if (pid !== "p1") { try { const pre = "u:" + pid + ":"; Storage.prototype.getItem = function (k) { return this === localStorage ? _lg.call(this, pre + k) : _lg.call(this, k); }; Storage.prototype.setItem = function (k, v) { return this === localStorage ? _ls.call(this, pre + k, v) : _ls.call(this, k, v); }; Storage.prototype.removeItem = function (k) { return this === localStorage ? _ld.call(this, pre + k) : _ld.call(this, k); }; } catch (e) { } }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П12.1 · 05.11.2026";
+const BUILD = "П12.3 · 05.11.2026";
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
 const plog = (k, d) => { try { if (typeof window.logEv === "function") { while (_pre.length) window.logEv(..._pre.shift()); window.logEv(k, d); } else _pre.push([k, d]); } catch (e) { } };
 
 /* ============ хранилище: IndexedDB + память ============ */
-const DBN = "koshelek-w";
+const DBN = "koshelek-w" + sfx;
 const idb = { db: null };
 const mem = new Map();                       // путь документа → данные
 const kv = {};                               // служебное: устройство, ревизии, согласия (store "kv")
@@ -51,7 +59,7 @@ const kvSet = (k, v) => { kv[k] = v; return idbTx(["kv"], "readwrite", tx => tx.
 const SEG = /^[A-Za-z0-9_\-.~:@+]+$/;
 const check = (p, even) => { const s = String(p).split("/"); if (s.some(x => !SEG.test(x) || x === "." || x === "..")) throw new TypeError("bad path " + p); if ((s.length % 2 === 0) !== even) throw new TypeError("path parity " + p); return s; };
 const listeners = new Map();                 // путь → Set(callback)
-const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("koshelek-w") : null;
+const bc = typeof BroadcastChannel === "function" ? new BroadcastChannel("koshelek-w" + sfx) : null;
 const snap = (id, data) => ({ id, exists: data !== undefined, data: () => clone(data), metadata: { fromCache: true, hasPendingWrites: false } });
 function fire(p) { const set = listeners.get(p); if (!set) return; const s = snap(p.split("/").pop(), mem.get(p)); for (const cb of [...set]) { try { cb(s); } catch (e) { console.error(e); } } }
 async function writeDoc(p, data, quiet) {
@@ -102,7 +110,7 @@ const Auth = {
       const t = setTimeout(() => reject({ code: "timeout", message: "Окно входа не ответило" }), prompt === "" ? 25000 : 180000);
       try {
         const c = google.accounts.oauth2.initTokenClient({
-          client_id: this.cid(), scope: SCOPE, prompt,
+          client_id: this.cid(), scope: SCOPE, prompt, hint: curProf().email || undefined,
           callback: r => { if (r.error) return done(reject, { code: r.error, message: r.error_description || r.error }); this.token = r.access_token; this.exp = Date.now() + (+r.expires_in || 3600) * 1000; this.lastSilent = Date.now(); done(resolve, this.token); },
           error_callback: e => done(reject, { code: e?.type || "popup", message: e?.message || "Окно входа не открылось" }),
         });
@@ -132,7 +140,7 @@ async function gzip(str) { const s = new Blob([str]).stream().pipeThrough(new Co
 async function gunzip(buf) { const s = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip")); return new Response(s).text(); }
 
 /* ============ синхронизация ============ */
-const SLOTS = ["koshelek-1.gz", "koshelek-2.gz", "koshelek-3.gz"];
+const SLOTS = ["koshelek" + sfx + "-1.gz", "koshelek" + sfx + "-2.gz", "koshelek" + sfx + "-3.gz"];
 const Sync = {
   state: "off", msg: "", timer: null, busy: false, conflict: null, lastCheck: 0, onState: null,
   set(state, msg) { this.state = state; this.msg = msg || ""; if (state !== this._ls) { this._ls = state; plog("sync", state + (msg ? " · " + msg : "")); } this.onState?.(); },
@@ -205,9 +213,9 @@ const Sync = {
 
 /* ============ ИИ: Gemini по личному ключу ============ */
 const AI = {
-  key() { return kv.geminiKey || ls.get("gk") || ""; },
-  model(tier) { return (kv.model || ls.get("gm") || CFG.model); },
-  fallback() { const f = kv.model2 || ls.get("gm2") || CFG.fallbackModel; return f && f !== this.model() ? f : ""; },
+  key() { return kv.geminiKey || ls.get(lk("gk")) || ""; },
+  model(tier) { return (kv.model || ls.get(lk("gm")) || CFG.model); },
+  fallback() { const f = kv.model2 || ls.get(lk("gm2")) || CFG.fallbackModel; return f && f !== this.model() ? f : ""; },
   /* 5xx: два повтора на основной модели (2,5 и 6 с), затем та же попытка на запасной; 429 и ошибки ключа — сразу */
   async fetchGem(body, opts) {
     const base = "https://generativelanguage.googleapis.com/v1beta/models/", delays = [2500, 6000], models = [this.model(opts?.modelTier)], fb = this.fallback();
@@ -308,7 +316,7 @@ function mountUI() {
   document.head.append(el("style", null, css));
   pill = el("button", { id: "kwPill", type: "button", "aria-label": "Подключения", onclick: () => openConn() }, el("i"), el("span"));
   document.body.append(pill);
-  Sync.onState = () => { updatePill(); if (dlg?.open) renderConn(); renderBar(); };
+  Sync.onState = () => { updatePill(); if (dlg?.open && dlgMode === "conn") renderConn(); renderBar(); };
   updatePill();
 }
 function updatePill() {
@@ -353,14 +361,14 @@ function renderConn() {
     key,
     el("div", { class: "m" }, "Что уходит в Gemini: названия получателей и назначения платежей; для фото — само фото чека. Суммы и номера счетов при разборе операций не отправляются. Единственное исключение — кнопка «Неверно — спросить ИИ» при незнакомом формате выписки: уходят первые строки файла, номера счетов обезличены. Внимание: на бесплатном уровне Google может использовать отправленное для улучшения своих продуктов."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", disabled: aiBusy, onclick: async () => { const v = key.value.trim(); if (!v && !hasKey) { aiMsg = "Вставьте ключ."; renderConn(); return; } await aiCheck(v); } }, aiBusy ? "Проверяю…" : hasKey && !key.value ? "Проверить ключ" : "Сохранить и проверить"),
-      hasKey ? el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("geminiKey", ""); ls.del("gk"); aiMsg = "Ключ удалён."; window.dispatchEvent(new Event("koshelek-ai")); renderConn(); } }, "Удалить ключ") : null),
+      hasKey ? el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("geminiKey", ""); ls.del(lk("gk")); aiMsg = "Ключ удалён."; window.dispatchEvent(new Event("koshelek-ai")); renderConn(); } }, "Удалить ключ") : null),
   ];
   const stAi = hasKey ? [el("div", { class: "m" }, "Ключ сохранён на этом телефоне. ИИ раскладывает траты по категориям."), el("details", null, el("summary", null, "Изменить или удалить ключ"), el("div", { style: "display:flex;flex-direction:column;gap:8px;margin-top:8px" }, stForm))] : stForm;
   if (aiMsg) stAi.push(el("div", { class: "m" + (/^✓/.test(aiMsg) ? "" : " bad") }, aiMsg));
-  const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set("gm", v); } } }), el("div", { class: "m" }, "Запасная модель (если основная отвечает 503): "), el("input", { type: "text", value: AI.fallback() || CFG.fallbackModel, onchange: ev => { const v = ev.target.value.trim(); kvSet("model2", v); ls.set("gm2", v); } }));
+  const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set(lk("gm"), v); } } }), el("div", { class: "m" }, "Запасная модель (если основная отвечает 503): "), el("input", { type: "text", value: AI.fallback() || CFG.fallbackModel, onchange: ev => { const v = ev.target.value.trim(); kvSet("model2", v); ls.set(lk("gm2"), v); } }));
   const inst = standalone();
   const body = [
-    el("h2", null, gateMode ? "Настроим «Кошелёк»" : "Подключения"),
+    el("h2", null, gateMode ? "Настроим «Кошелёк»" + (PROF.list.length > 1 ? " · " + curProf().name : "") : "Подключения"),
     stepBox(1, "Установка на главный экран", inst ? true : "bad", inst ? "готово" : "нужно", inst ? el("div", { class: "m" }, "Приложение запущено как установленное.") : el("div", { class: "m" }, "Меню Chrome ⋮ → «Добавить на главный экран» → «Установить». Дальше открывайте «Кошелёк» с главного экрана: так данные браузер не удаляет.")),
     stepBox(2, "Вход Google и копия на Диске", g, g ? "подключено" : "не подключено", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stGoogle)),
     stepBox(3, "ИИ-помощник (Gemini)", hasKey, hasKey ? "ключ есть" : "не задан", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stAi, adv)),
@@ -373,11 +381,11 @@ async function aiCheck(v) {
   aiBusy = true; aiMsg = ""; renderConn();
   const old = AI.key();
   try {
-    if (v) { await kvSet("geminiKey", v); ls.set("gk", v); }
+    if (v) { await kvSet("geminiKey", v); ls.set(lk("gk"), v); }
     const r = await sampleText("Ответь одним словом: ок", { modelTier: "quick" });
     aiMsg = "✓ Ключ работает (ответ: " + String(r.text).trim().slice(0, 20) + ").";
   } catch (e) {
-    if (v && old !== v) { await kvSet("geminiKey", old || ""); old ? ls.set("gk", old) : ls.del("gk"); }
+    if (v && old !== v) { await kvSet("geminiKey", old || ""); old ? ls.set(lk("gk"), old) : ls.del(lk("gk")); }
     aiMsg = e.code === "not_granted" ? "Ключ не принят Google. Проверьте, что скопировали его целиком." : e.code === "rate_limited" ? "Ключ принят, но лимит запросов исчерпан. Подождите минуту." : e.code === "upstream_error" ? "Не получилось связаться с Gemini: " + e.message : "Ошибка: " + (e.message || e.code);
     if (e.code === "rate_limited" && v) aiMsg = "✓ Ключ сохранён, но сейчас лимит запросов — повторите позже.";
   }
@@ -386,7 +394,7 @@ async function aiCheck(v) {
 async function googleLogin() {
   gMsg = ""; renderConn();
   try {
-    await Auth.get("consent");
+    await Auth.get("select_account consent");
     await kvSet("consented", true);
     Sync.set("sync", "Ищу копию на Диске…");
     const files = await Sync.remote();
@@ -401,7 +409,52 @@ async function googleLogin() {
   }
   renderConn();
 }
-function openConn() { mountUI(); if (!dlg) { dlg = el("dialog", { id: "kwDlg" }); document.body.append(dlg); dlg.addEventListener("close", () => { if (gateMode && !gateRes) return; }); dlg.addEventListener("cancel", ev => { if (gateMode) ev.preventDefault(); }); } renderConn(); if (!dlg.open) dlg.showModal(); }
+let dlgMode = "conn", usr = { edit: null, del: null, msg: "" };
+function ensureDlg() { mountUI(); if (!dlg) { dlg = el("dialog", { id: "kwDlg" }); document.body.append(dlg); dlg.addEventListener("close", () => { if (gateMode && !gateRes) return; }); dlg.addEventListener("cancel", ev => { if (gateMode) ev.preventDefault(); }); } }
+function openConn() { ensureDlg(); dlgMode = "conn"; renderConn(); if (!dlg.open) dlg.showModal(); }
+function openUsers() { ensureDlg(); dlgMode = "users"; usr = { edit: null, del: null, msg: "" }; renderUsers(); if (!dlg.open) dlg.showModal(); }
+async function flushSync() { try { if (Sync.consented() && kv.dirty && !Sync.conflict) await Promise.race([Sync.run(true), sleep(5000)]); } catch (e) { } }
+async function switchTo(id) { usr.msg = "Переключаю…"; renderUsers(); await flushSync(); PROF.act = id; saveProf(); location.reload(); }
+function addProf(name, email) {
+  name = String(name || "").trim(); if (!name) { usr.msg = "Введите имя."; renderUsers(); return; }
+  const id = "u" + Date.now().toString(36); PROF.list.push({ id, name: name.slice(0, 30), email: String(email || "").trim() }); saveProf(); switchTo(id);
+}
+function delProf(id) {
+  const i = PROF.list.findIndex(p => p.id === id); if (i < 0 || id === pid) return;
+  PROF.list.splice(i, 1); saveProf();
+  try { indexedDB.deleteDatabase("koshelek-w" + (id === "p1" ? "" : "-" + id)); } catch (e) { }
+  for (const k of ["gk", "gm", "gm2"]) ls.del(id === "p1" ? k : k + ":" + id);
+  try { for (let i2 = localStorage.length - 1; i2 >= 0; i2--) { const k = localStorage.key(i2); if (k && k.startsWith("u:" + id + ":")) _ld.call(localStorage, k); } } catch (e) { }
+  usr.del = null; usr.msg = "Пользователь удалён с этого телефона. Копия на Диске осталась."; renderUsers();
+}
+function renderUsers() {
+  if (!dlg) return;
+  const rows = PROF.list.map(p => {
+    const me = p.id === pid;
+    if (usr.edit === p.id) {
+      const n = el("input", { type: "text", value: p.name, maxlength: 30, "aria-label": "Имя пользователя" }), m = el("input", { type: "text", value: p.email || "", placeholder: "Google-почта (необязательно)", autocomplete: "off", "aria-label": "Google-почта" });
+      return el("div", { class: "st" }, n, m, el("div", { class: "row" },
+        el("button", { class: "btn primary", type: "button", onclick: () => { const v = n.value.trim(); if (!v) return; p.name = v.slice(0, 30); p.email = m.value.trim(); saveProf(); usr.edit = null; renderUsers(); } }, "Сохранить"),
+        el("button", { class: "btn", type: "button", onclick: () => { usr.edit = null; renderUsers(); } }, "Отмена")));
+    }
+    return el("div", { class: "st" + (me ? " done" : "") },
+      el("div", { class: "hd" }, el("h3", null, p.name), me ? el("span", { class: "tag ok" }, "активен") : null),
+      p.email ? el("div", { class: "m" }, p.email) : null,
+      el("div", { class: "row" },
+        me ? null : el("button", { class: "btn primary", type: "button", onclick: () => switchTo(p.id) }, "Переключиться"),
+        el("button", { class: "btn", type: "button", onclick: () => { usr.edit = p.id; usr.del = null; renderUsers(); } }, "Изменить"),
+        me || PROF.list.length < 2 ? null : el("button", { class: "btn", type: "button", onclick: () => { if (usr.del === p.id) delProf(p.id); else { usr.del = p.id; renderUsers(); } } }, usr.del === p.id ? "Точно удалить?" : "Удалить")));
+  });
+  const nn = el("input", { type: "text", id: "kwNewName", placeholder: "Имя нового пользователя", maxlength: 30, autocomplete: "off" }), nm = el("input", { type: "text", id: "kwNewMail", placeholder: "Google-почта (необязательно)", autocomplete: "off" });
+  dlg.replaceChildren(el("div", { class: "kw" },
+    el("h2", null, "Пользователи"),
+    el("div", { class: "m" }, "У каждого свои данные, ключ ИИ и копия на Диске. Общие только приложение и его Client ID. Если у пользователя свой аккаунт Google, укажите его почту: так вход и обновление не перепутают аккаунты."),
+    rows,
+    el("div", { class: "st" }, el("h3", null, "Добавить пользователя"), nn, nm, el("button", { class: "btn primary", type: "button", onclick: () => addProf(nn.value, nm.value) }, "Добавить и переключить")),
+    usr.msg ? el("div", { class: "m" }, usr.msg) : null,
+    el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => dlg.close() }, "Закрыть"))));
+}
+document.addEventListener("click", ev => { if (ev.target.closest("#kwUser")) openUsers(); });
 function finishGate() { gateMode = false; kvSet("setupDone", true); dlg.close(); gateRes?.(); gateRes = null; }
 function gate() {
   if (kv.setupDone || mem.size) return Promise.resolve();
@@ -438,5 +491,5 @@ const use = async name => {
   return null;
 };
 window.claude = Object.freeze({ use });
-window.KOSHELEK = { openConn, Sync, AI, mem, kv, db, build: BUILD };
+window.KOSHELEK = { openConn, openUsers, profile: curProf, Sync, AI, mem, kv, db, build: BUILD };
 })();

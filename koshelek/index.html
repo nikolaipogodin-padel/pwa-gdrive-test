@@ -1241,6 +1241,8 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 .sa[open]>summary::after{transform:rotate(90deg)}
 .sa-conn{background:var(--accent);color:var(--accent-ink,#fff)}
 .sa-conn .sa-v,.sa-conn::after{color:inherit;opacity:.85}
+.sa-conn.sa-plain{background:var(--surface);color:inherit}
+.sa-conn.sa-plain .sa-v,.sa-conn.sa-plain::after{color:var(--muted);opacity:1}
 .sa-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
 .sa-h{margin:4px 0 0;font-size:var(--fs-s);font-weight:600;color:var(--muted)}
 #p-set .ops{box-shadow:none;border:1px solid var(--line)}
@@ -1570,6 +1572,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   <div class="coach-overlay" id="qCoach" hidden><div class="coach-card" role="dialog" aria-modal="true" aria-labelledby="qCoachT"><h2 class="coach-title" id="qCoachT">Выписка разобрана</h2><p class="coach-text">Кошелёк обработал вашу банковскую выписку и предложил статьи расходов.</p><p class="coach-text">Теперь проверьте и подтвердите, куда отнести платежи. Так вы научите Кошелёк распознавать их в дальнейшем.</p><p class="coach-text">Чтобы было проще начать, мы разделили выписку на периоды. Сейчас покажем <b>только последние два месяца</b>.</p><button class="btn primary" type="button" id="qCoachGo">Начать проверку</button></div></div>
 
   <section id="p-set" role="tabpanel" aria-labelledby="t-set" hidden>
+    <button type="button" class="sa-conn sa-plain" id="kwUser"><span class="sa-t">Пользователь</span><span class="sa-v" id="kwUserV"></span></button>
     <button type="button" class="sa-conn" id="kwConn"><span class="sa-t">Подключения</span><span class="sa-v" id="kwConnV"></span></button>
     <details class="sa" id="saProf"><summary><span class="sa-t">Профиль и доход</span><span class="sa-v" id="saProfV"></span></summary><div class="sa-b">
       <label class="sa-h" for="sName">Имя</label>
@@ -11015,7 +11018,7 @@ window.addEventListener("koshelek-ai-wait",ev=>{const n=document.getElementById(
 const set=(id,t)=>{const e=g(id);if(e&&e.textContent!==t)e.textContent=t};
 const pl=(n,a,b,c)=>{const m=n%100,d=n%10;return n+" "+(m>10&&m<20?c:d===1?a:d>1&&d<5?b:c)};
 function upd(){try{const K=window.KOSHELEK;if(!K)return;
-set("kwConnV",(K.Sync.consented()?"Диск "+(ST[K.Sync.state]||""):"Диск выкл")+" · ключ "+(K.AI.key()?"есть":"нет"));
+set("kwUserV",K.profile?K.profile().name:"");set("kwConnV",(K.Sync.consented()?"Диск "+(ST[K.Sync.state]||""):"Диск выкл")+" · ключ "+(K.AI.key()?"есть":"нет"));
 const nm=(g("sName")||{}).value||"";set("saProfV",(nm||"без имени")+" · "+pl(document.querySelectorAll("#sInc .chip").length,"признак","признака","признаков"));
 set("saAccV",pl(document.querySelectorAll("#sAcc .acc-row").length,"счёт","счёта","счетов"));
 const ai=g("sAI");set("saAIV",(ai&&ai.selectedOptions[0]?ai.selectedOptions[0].text.split(" — ")[0]:"")+(g("sAuto")&&g("sAuto").checked?" · без подтверждения":""));}catch(e){}}
