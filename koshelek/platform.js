@@ -210,11 +210,11 @@ const AI = {
       let r;
       try { r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": this.key() }, body: JSON.stringify(body), signal: opts?.signal }); }
       catch (e) { if (e?.name === "AbortError" || opts?.signal?.aborted) throw { code: "cancelled", message: "Остановлено" }; throw { code: "upstream_error", message: "Нет связи с ИИ" }; }
-      if (r.ok) return r.json();
+      if (r.ok) { if (a) window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: null })); return r.json(); }
       let j = null; try { j = await r.json(); } catch (e) { }
       const msg = j?.error?.message || ("HTTP " + r.status);
       if (r.status === 429) throw { code: "rate_limited", message: msg };
-      if ([500, 502, 503, 504].includes(r.status)) { if (a < delays.length) { await sleep(delays[a] + Math.random() * 800); continue; } throw { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" }; }
+      if ([500, 502, 503, 504].includes(r.status)) { if (a < delays.length) { const w = delays[a] + Math.random() * 800; window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { s: Math.round(w / 1000), n: a + 1, of: delays.length } })); await sleep(w); continue; } throw { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" }; }
       if ([400, 401, 403].includes(r.status)) { if (/API key|API_KEY|permission|PERMISSION/i.test(msg) || r.status !== 400) throw { code: "not_granted", message: msg }; throw { code: "upstream_error", message: msg }; }
       throw { code: "upstream_error", message: msg };
     }
@@ -306,7 +306,7 @@ function renderBar() {
 }
 const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 function stepBox(n, title, done, tag, body) {
-  return el("div", { class: "st" + (done ? " done" : "") }, el("div", { class: "hd" }, el("h3", null, n + ". " + title), el("span", { class: "tag" + (done === true ? " ok" : done === "bad" ? " bad" : "") }, tag)), body);
+  return el("div", { class: "st" + (done === true ? " done" : "") }, el("div", { class: "hd" }, el("h3", null, n + ". " + title), el("span", { class: "tag" + (done === true ? " ok" : done === "bad" ? " bad" : "") }, tag)), body);
 }
 let gateRes = null, gateMode = false, aiMsg = "", aiBusy = false, gMsg = "";
 function renderConn() {
@@ -321,15 +321,15 @@ function renderConn() {
       el("button", { class: "btn primary", type: "button", onclick: googleLogin }, "Войти через Google"));
   } else {
     stGoogle.push(el("div", { class: "m" + (["error", "login", "conflict"].includes(Sync.state) ? " bad" : "") }, (STATE_LABEL[Sync.state] || "") + (Sync.msg && Sync.msg !== STATE_LABEL[Sync.state] ? ": " + Sync.msg : "") + (kv.lastSync ? " · последняя: " + new Date(kv.lastSync).toLocaleString("ru-RU") : "")),
-      el("div", { class: "row" },
+      (["ok", "pending", "sync"].includes(Sync.state) ? (r => el("details", null, el("summary", null, "Управление"), r)) : (r => r))(el("div", { class: "row", style: "margin-top:8px" },
         el("button", { class: "btn", type: "button", onclick: async () => { if (Sync.state === "login") { try { await Auth.get("consent"); } catch (e) { } } kvSet("dirty", true); Sync.conflict ? null : Sync.run(); } }, "Синхронизировать сейчас"),
-        el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("consented", false); Auth.token = null; Sync.set("off", ""); renderConn(); } }, "Отключить")));
+        el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("consented", false); Auth.token = null; Sync.set("off", ""); renderConn(); } }, "Отключить"))));
   }
   if (gMsg) stGoogle.push(el("div", { class: "m bad" }, gMsg));
   if (Sync.conflict) stGoogle.push(el("div", { class: "st" }, el("div", { class: "m" }, "На Диске копия от " + new Date(Sync.conflict.data.savedAt || Date.now()).toLocaleString("ru-RU") + ". Выберите, какие данные оставить — вторые будут заменены."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с этого телефона"))));
   const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён на этом телефоне" : "Ключ Gemini (AIza…)", autocomplete: "off" });
-  const stAi = [
+  const stForm = [
     el("div", { class: "m" }, "ИИ раскладывает траты по категориям. Нужен личный бесплатный ключ Google AI Studio. Ключ хранится только на этом телефоне и никуда не синхронизируется."),
     el("div", { class: "m" }, el("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "Открыть страницу ключа"), " → «Create API key» → скопировать и вставить сюда."),
     key,
@@ -337,6 +337,7 @@ function renderConn() {
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", disabled: aiBusy, onclick: async () => { const v = key.value.trim(); if (!v && !hasKey) { aiMsg = "Вставьте ключ."; renderConn(); return; } await aiCheck(v); } }, aiBusy ? "Проверяю…" : hasKey && !key.value ? "Проверить ключ" : "Сохранить и проверить"),
       hasKey ? el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("geminiKey", ""); ls.del("gk"); aiMsg = "Ключ удалён."; window.dispatchEvent(new Event("koshelek-ai")); renderConn(); } }, "Удалить ключ") : null),
   ];
+  const stAi = hasKey ? [el("div", { class: "m" }, "Ключ сохранён на этом телефоне. ИИ раскладывает траты по категориям."), el("details", null, el("summary", null, "Изменить или удалить ключ"), el("div", { style: "display:flex;flex-direction:column;gap:8px;margin-top:8px" }, stForm))] : stForm;
   if (aiMsg) stAi.push(el("div", { class: "m" + (/^✓/.test(aiMsg) ? "" : " bad") }, aiMsg));
   const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set("gm", v); } } }));
   const inst = standalone();
