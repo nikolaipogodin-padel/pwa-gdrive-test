@@ -1230,6 +1230,23 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 @keyframes kwInd{from{margin-left:0}to{margin-left:65%}}
 @media(prefers-reduced-motion:reduce){.pbar-in.ind{animation:none;width:100%!important;opacity:.5}}
 #rScopeWrap{display:grid;gap:6px}
+
+#p-set{display:flex;flex-direction:column;gap:10px}
+.sa,.sa-conn{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow)}
+.sa>summary,.sa-conn{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;min-height:56px;cursor:pointer;font:inherit;color:inherit;border:0;width:100%;text-align:left;box-sizing:border-box}
+.sa>summary::-webkit-details-marker{display:none}
+.sa-t{font-size:var(--fs-m);font-weight:600;flex:none}
+.sa-v{font-size:var(--fs-s);color:var(--muted);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto}
+.sa>summary::after,.sa-conn::after{content:"›";color:var(--muted);font-size:22px;line-height:1;flex:none;transition:transform .15s}
+.sa[open]>summary::after{transform:rotate(90deg)}
+.sa-conn{background:var(--accent);color:var(--accent-ink,#fff)}
+.sa-conn .sa-v,.sa-conn::after{color:inherit;opacity:.85}
+.sa-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+.sa-h{margin:4px 0 0;font-size:var(--fs-s);font-weight:600;color:var(--muted)}
+#p-set .ops{box-shadow:none;border:1px solid var(--line)}
+#p-set #sAcc{border:0;border-radius:0;background:none}
+#sAcc .acc-row:last-child{border-bottom:0}
+#p-set .inline .btn{flex:none}
 </style>
 
 <div class="wrap">
@@ -1553,52 +1570,45 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   <div class="coach-overlay" id="qCoach" hidden><div class="coach-card" role="dialog" aria-modal="true" aria-labelledby="qCoachT"><h2 class="coach-title" id="qCoachT">Выписка разобрана</h2><p class="coach-text">Кошелёк обработал вашу банковскую выписку и предложил статьи расходов.</p><p class="coach-text">Теперь проверьте и подтвердите, куда отнести платежи. Так вы научите Кошелёк распознавать их в дальнейшем.</p><p class="coach-text">Чтобы было проще начать, мы разделили выписку на периоды. Сейчас покажем <b>только последние два месяца</b>.</p><button class="btn primary" type="button" id="qCoachGo">Начать проверку</button></div></div>
 
   <section id="p-set" role="tabpanel" aria-labelledby="t-set" hidden>
-    <section class="card">
-      <div class="set-sec">
-        <h3>Имя</h3>
-        <div class="inline"><input id="sName" type="text" maxlength="40" aria-label="Ваше имя" placeholder="Ваше имя"><button class="btn" type="button" id="sNameSave">Сохранить</button></div>
-      </div>
-      <div class="set-sec">
-        <div class="hrow"><h3>Признаки дохода</h3></div>
-        <div class="chips" id="sInc"></div>
-        <div class="inline"><input id="sIncNew" type="text" maxlength="60" placeholder="Например: SIA DARBA DEVĒJS" aria-label="Признак дохода"><button class="btn" type="button" id="sIncAdd">Добавить</button></div>
-        <div class="note" id="sIncMsg" aria-live="polite"></div>
-      </div>
-      <div class="set-sec">
-        <h3>Счета</h3>
-        <div class="ops" id="sAcc"></div>
-      </div>
-      <div class="set-sec">
-        <div class="hrow"><h3>Правила</h3><span class="small muted" id="sRulesInfo"></span></div>
-        <div class="seg-ctl rule-sw" id="ruleSw" role="group" aria-label="Какие правила показать"><button type="button" data-rf2="all" aria-pressed="true">Мои</button><button type="button" data-rf2="cand" aria-pressed="false">Ждут подтверждения</button><button type="button" data-rf2="ai" aria-pressed="false">От ИИ</button></div>
-        <div id="sCandBox" hidden><div class="cand-h"><b>Предложил ИИ — ждут подтверждения</b><button type="button" class="btn primary" id="candAll">Принять все</button></div><div class="ops" id="sCands"></div></div>
-        <input type="search" id="sRuleQ" class="rule-q" placeholder="Найти правило: текст или статья" aria-label="Найти правило" autocomplete="off" hidden>
-        <div class="ops" id="sRules"></div>
-      </div>
-      <div class="set-sec">
-        <h3>ИИ</h3>
-        <div class="inline"><button class="btn primary" type="button" id="kwConn">Подключения: Google Диск и ключ ИИ</button><button class="btn" type="button" id="aiTest">Проверить подключение ИИ</button><button class="btn" type="button" id="kwLog">Скопировать журнал для разработчика</button></div><p class="small" id="aiTestOut" aria-live="polite"></p>
-        <label class="aipick"><span class="hl">ИИ-помощник <button type="button" class="ib" data-tip="ИИ раскладывает операции, которые не узнали правила, разбирает текст и фото чеков, распознаёт формат незнакомого банка. Номера счетов и карт скрыты. Авто: сначала быстрая модель, неуверенные ответы перепроверяет точная. Быстрый отвечает скорее, точный — внимательнее, но дольше. Работает Gemini по вашему личному бесплатному ключу и расходует его лимит." aria-label="Подсказка" aria-expanded="false">i</button></span><select id="sAI" aria-label="ИИ-помощник"><option value="auto">Авто — рекомендую</option><option value="quick">Быстрый</option><option value="default">Обычный</option><option value="complex">Точный, медленнее</option><option value="off">Без ИИ — только правила</option></select></label>
-        <label class="tg"><span class="hl">Без подтверждения <button type="button" class="ib" data-tip="ИИ сам записывает уверенные ответы. Во «Вопросах» остаётся только неясное." aria-label="Подсказка" aria-expanded="false">i</button></span><input type="checkbox" class="switch" role="switch" id="sAuto"></label>
-        <div class="notes hints"><span class="hl">Подсказки для ИИ <button type="button" class="ib" data-tip="Напишите своими словами, как раскладывать траты: кто эти люди, что за переводы, какие магазины к чему относятся. ИИ учитывает это при каждой раскладке и при разборе трат вне выписки. Вторая учёба — исправления: каждая ваша правка операции становится примером для ИИ." aria-label="Подсказка" aria-expanded="false">i</button></span>
+    <button type="button" class="sa-conn" id="kwConn"><span class="sa-t">Подключения</span><span class="sa-v" id="kwConnV"></span></button>
+    <details class="sa" id="saProf"><summary><span class="sa-t">Профиль и доход</span><span class="sa-v" id="saProfV"></span></summary><div class="sa-b">
+      <label class="sa-h" for="sName">Имя</label>
+      <div class="inline"><input id="sName" type="text" maxlength="40" aria-label="Ваше имя" placeholder="Ваше имя"><button class="btn" type="button" id="sNameSave">Сохранить</button></div>
+      <div class="sa-h">Признаки дохода</div>
+      <div class="chips" id="sInc"></div>
+      <div class="inline"><input id="sIncNew" type="text" maxlength="60" placeholder="Например: SIA DARBA DEVĒJS" aria-label="Признак дохода"><button class="btn" type="button" id="sIncAdd">Добавить</button></div>
+      <div class="note" id="sIncMsg" aria-live="polite"></div>
+    </div></details>
+    <details class="sa" id="saAcc"><summary><span class="sa-t">Счета</span><span class="sa-v" id="saAccV"></span></summary><div class="sa-b">
+      <div class="ops" id="sAcc"></div>
+    </div></details>
+    <details class="sa" id="saRules"><summary><span class="sa-t">Правила</span><span class="sa-v" id="sRulesInfo"></span></summary><div class="sa-b">
+      <div class="seg-ctl rule-sw" id="ruleSw" role="group" aria-label="Какие правила показать"><button type="button" data-rf2="all" aria-pressed="true">Мои</button><button type="button" data-rf2="cand" aria-pressed="false">Ждут подтверждения</button><button type="button" data-rf2="ai" aria-pressed="false">От ИИ</button></div>
+      <div id="sCandBox" hidden><div class="cand-h"><b>Предложил ИИ — ждут подтверждения</b><button type="button" class="btn primary" id="candAll">Принять все</button></div><div class="ops" id="sCands"></div></div>
+      <input type="search" id="sRuleQ" class="rule-q" placeholder="Найти правило: текст или статья" aria-label="Найти правило" autocomplete="off" hidden>
+      <div class="ops" id="sRules"></div>
+    </div></details>
+    <details class="sa" id="saAI"><summary><span class="sa-t">ИИ-помощник</span><span class="sa-v" id="saAIV"></span></summary><div class="sa-b">
+      <label class="aipick"><span class="hl">ИИ-помощник <button type="button" class="ib" data-tip="ИИ раскладывает операции, которые не узнали правила, разбирает текст и фото чеков, распознаёт формат незнакомого банка. Номера счетов и карт скрыты. Авто: сначала быстрая модель, неуверенные ответы перепроверяет точная. Быстрый отвечает скорее, точный — внимательнее, но дольше. Работает Gemini по вашему личному бесплатному ключу и расходует его лимит." aria-label="Подсказка" aria-expanded="false">i</button></span><select id="sAI" aria-label="ИИ-помощник"><option value="auto">Авто — рекомендую</option><option value="quick">Быстрый</option><option value="default">Обычный</option><option value="complex">Точный, медленнее</option><option value="off">Без ИИ — только правила</option></select></label>
+      <label class="tg"><span class="hl">Без подтверждения <button type="button" class="ib" data-tip="ИИ сам записывает уверенные ответы. Во «Вопросах» остаётся только неясное." aria-label="Подсказка" aria-expanded="false">i</button></span><input type="checkbox" class="switch" role="switch" id="sAuto"></label>
+      <div class="notes hints"><span class="hl">Подсказки для ИИ <button type="button" class="ib" data-tip="Напишите своими словами, как раскладывать траты: кто эти люди, что за переводы, какие магазины к чему относятся. ИИ учитывает это при каждой раскладке и при разборе трат вне выписки. Вторая учёба — исправления: каждая ваша правка операции становится примером для ИИ." aria-label="Подсказка" aria-expanded="false">i</button></span>
           <div id="sHintBox"></div>
           <textarea id="sNotes" rows="2" maxlength="300" aria-label="Новая подсказка" placeholder="Например: JĀNIS BĒRZIŅŠ — партнёр по теннису, его переводы — возврат по «Спорт»."></textarea></div>
-        <div class="inline"><button class="btn" type="button" id="sNotesSave">Добавить подсказку</button><span class="note" id="sNotesMsg" aria-live="polite"></span></div>
-        <div class="inline"><button class="btn" type="button" id="sRedo">Перепроверить ответы ИИ</button><button type="button" class="ib" id="sRedoTip" data-tip="ИИ ещё раз посмотрит операции, которые разложил раньше прежней подсказкой. Ваши правки и ваш выбор не меняются. Неясное вернётся в «Вопросы»." aria-label="Подсказка" aria-expanded="false">i</button><span class="note" id="sRedoMsg" aria-live="polite"></span></div>
-      </div>
-      <div class="set-sec">
-        <h3>Данные</h3>
-        <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><span class="note" id="sExportMsg" aria-live="polite"></span></div>
-        <details class="more del-all" id="sDelBox"><summary>Удалить все данные</summary>
+      <div class="inline"><button class="btn" type="button" id="sNotesSave">Добавить подсказку</button><span class="note" id="sNotesMsg" aria-live="polite"></span></div>
+      <div class="inline"><button class="btn" type="button" id="sRedo">Перепроверить ответы ИИ</button><button type="button" class="ib" id="sRedoTip" data-tip="ИИ ещё раз посмотрит операции, которые разложил раньше прежней подсказкой. Ваши правки и ваш выбор не меняются. Неясное вернётся в «Вопросы»." aria-label="Подсказка" aria-expanded="false">i</button><span class="note" id="sRedoMsg" aria-live="polite"></span></div>
+    </div></details>
+    <details class="sa" id="saData"><summary><span class="sa-t">Данные</span></summary><div class="sa-b">
+      <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><span class="note" id="sExportMsg" aria-live="polite"></span></div>
+      <details class="more del-all" id="sDelBox"><summary>Удалить все данные</summary>
           <p class="note">Вернуть нельзя: операции, правки, правила и настройки удалятся, апп начнётся с первого запуска. Перед этим можно «Скачать копию (JSON)». Для подтверждения напишите «удалить».</p>
           <div class="inline"><input id="sDelWord" type="text" autocomplete="off" aria-label="Подтверждение удаления"><button class="btn quiet" type="button" id="sDel" disabled>Удалить всё</button></div>
         </details>
-      </div>
-      <div class="set-sec">
-        <h3>О программе</h3>
-        <p class="note" id="foot"></p>
-      </div>
-    </section>
+    </div></details>
+    <details class="sa" id="saAbout"><summary><span class="sa-t">О программе и диагностика</span></summary><div class="sa-b">
+      <p class="note" id="foot"></p>
+      <div class="inline"><button class="btn" type="button" id="aiTest">Проверить подключение ИИ</button><button class="btn" type="button" id="kwLog">Скопировать журнал для разработчика</button></div>
+      <p class="small" id="aiTestOut" aria-live="polite"></p>
+    </div></details>
   </section>
 
   </div>
@@ -11000,6 +11010,16 @@ document.addEventListener("click",ev=>{if(ev.target.closest("#kwConn"))window.KO
 document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
 window.addEventListener("koshelek-ai",async()=>{try{S.sample=await window.claude.use("sample");if(S.inputs&&typeof drawAll==="function")drawAll()}catch(e){}});
 window.addEventListener("koshelek-ai-wait",ev=>{const n=document.getElementById("kwAiNote");if(!n)return;clearTimeout(n._t);if(!ev.detail){n.hidden=true;return}n.hidden=false;n.textContent=ev.detail.fb?"Основная модель занята, пробую запасную: "+ev.detail.fb:"ИИ занят, пробую снова через "+ev.detail.s+" с ("+ev.detail.n+" из "+ev.detail.of+")";n._t=setTimeout(()=>{n.hidden=true},20000)});
+
+(()=>{const g=id=>document.getElementById(id),ST={ok:"ок",pending:"ок",sync:"ок",error:"ошибка",offline:"нет сети",login:"нужен вход",conflict:"конфликт",off:"выкл"};
+const set=(id,t)=>{const e=g(id);if(e&&e.textContent!==t)e.textContent=t};
+const pl=(n,a,b,c)=>{const m=n%100,d=n%10;return n+" "+(m>10&&m<20?c:d===1?a:d>1&&d<5?b:c)};
+function upd(){try{const K=window.KOSHELEK;if(!K)return;
+set("kwConnV",(K.Sync.consented()?"Диск "+(ST[K.Sync.state]||""):"Диск выкл")+" · ключ "+(K.AI.key()?"есть":"нет"));
+const nm=(g("sName")||{}).value||"";set("saProfV",(nm||"без имени")+" · "+pl(document.querySelectorAll("#sInc .chip").length,"признак","признака","признаков"));
+set("saAccV",pl(document.querySelectorAll("#sAcc .acc-row").length,"счёт","счёта","счетов"));
+const ai=g("sAI");set("saAIV",(ai&&ai.selectedOptions[0]?ai.selectedOptions[0].text.split(" — ")[0]:"")+(g("sAuto")&&g("sAuto").checked?" · без подтверждения":""));}catch(e){}}
+setInterval(upd,1500);document.addEventListener("click",()=>setTimeout(upd,200));document.addEventListener("input",()=>setTimeout(upd,200));addEventListener("koshelek-ai",()=>setTimeout(upd,200));})();
 /* зелёные подтверждения («Сохранено…», «Добавлено…») гаснут сами через 6 с */
 (()=>{const T=new WeakMap();new MutationObserver(ms=>{for(const m of ms){const e=m.target.nodeType===3?m.target.parentElement:m.target;const n=e&&e.closest&&e.closest(".okmsg");if(!n||!n.textContent)continue;clearTimeout(T.get(n));T.set(n,setTimeout(()=>{if(n.classList.contains("okmsg")){n.textContent="";n.className="small muted"}},6000))}}).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["class"]})})();
 if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
