@@ -5,7 +5,7 @@
    Данные всегда сначала пишутся в IndexedDB; сбой Диска или ИИ работу не блокирует. */
 (() => {
 "use strict";
-const CFG = Object.assign({ googleClientId: "", model: "gemini-3.5-flash-lite", syncDelayMs: 20000, version: "1" }, window.KOSHELEK_CONFIG || {});
+const CFG = Object.assign({ googleClientId: "", model: "gemini-3.5-flash-lite", fallbackModel: "gemini-3.1-flash-lite", syncDelayMs: 20000, version: "1" }, window.KOSHELEK_CONFIG || {});
 const ls = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }, del(k) { try { localStorage.removeItem(k); } catch (e) { } } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
@@ -207,22 +207,35 @@ const Sync = {
 const AI = {
   key() { return kv.geminiKey || ls.get("gk") || ""; },
   model(tier) { return (kv.model || ls.get("gm") || CFG.model); },
+  fallback() { const f = kv.model2 || ls.get("gm2") || CFG.fallbackModel; return f && f !== this.model() ? f : ""; },
+  /* 5xx: два повтора на основной модели (2,5 и 6 с), затем та же попытка на запасной; 429 и ошибки ключа — сразу */
   async fetchGem(body, opts) {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(this.model(opts?.modelTier)) + ":generateContent";
-    const delays = [2500, 6000, 12000];
-    for (let a = 0; ; a++) {
-      if (opts?.signal?.aborted) throw { code: "cancelled", message: "Остановлено" };
-      let r;
-      try { r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": this.key() }, body: JSON.stringify(body), signal: opts?.signal }); }
-      catch (e) { if (e?.name === "AbortError" || opts?.signal?.aborted) throw { code: "cancelled", message: "Остановлено" }; throw { code: "upstream_error", message: "Нет связи с ИИ" }; }
-      if (r.ok) { if (a) window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: null })); return r.json(); }
-      let j = null; try { j = await r.json(); } catch (e) { }
-      const msg = j?.error?.message || ("HTTP " + r.status);
-      if (r.status === 429) { plog("ai-err", "429 лимит"); } if (r.status === 429) throw { code: "rate_limited", message: msg };
-      if ([500, 502, 503, 504].includes(r.status)) { if (a < delays.length) { const w = delays[a] + Math.random() * 800; plog("ai-retry", r.status + " · повтор " + (a + 1) + " из " + delays.length); window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { s: Math.round(w / 1000), n: a + 1, of: delays.length } })); await sleep(w); continue; } throw { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" }; }
-      if ([400, 401, 403].includes(r.status)) { if (/API key|API_KEY|permission|PERMISSION/i.test(msg) || r.status !== 400) throw { code: "not_granted", message: msg }; throw { code: "upstream_error", message: msg }; }
-      throw { code: "upstream_error", message: msg };
+    const base = "https://generativelanguage.googleapis.com/v1beta/models/", delays = [2500, 6000], models = [this.model(opts?.modelTier)], fb = this.fallback();
+    if (fb) models.push(fb);
+    let lastErr = null;
+    for (let mi = 0; mi < models.length; mi++) {
+      const url = base + encodeURIComponent(models[mi]) + ":generateContent";
+      for (let a = 0; ; a++) {
+        if (opts?.signal?.aborted) throw { code: "cancelled", message: "Остановлено" };
+        let r;
+        try { r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": this.key() }, body: JSON.stringify(body), signal: opts?.signal }); }
+        catch (e) { if (e?.name === "AbortError" || opts?.signal?.aborted) throw { code: "cancelled", message: "Остановлено" }; throw { code: "upstream_error", message: "Нет связи с ИИ" }; }
+        if (r.ok) { if (a || mi) window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: null })); if (mi) plog("ai-fallback", "ответила запасная: " + models[mi]); return r.json(); }
+        let j = null; try { j = await r.json(); } catch (e) { }
+        const msg = j?.error?.message || ("HTTP " + r.status);
+        if (r.status === 429) { plog("ai-err", "429 лимит"); throw { code: "rate_limited", message: msg }; }
+        if ([500, 502, 503, 504].includes(r.status)) {
+          if (a < delays.length) { const w = delays[a] + Math.random() * 800; plog("ai-retry", models[mi] + " · " + r.status + " · повтор " + (a + 1) + " из " + delays.length); window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { s: Math.round(w / 1000), n: a + 1, of: delays.length } })); await sleep(w); continue; }
+          lastErr = { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" };
+          if (mi < models.length - 1) { plog("ai-fallback", models[mi] + " → " + models[mi + 1] + " (" + r.status + ")"); window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { fb: models[mi + 1] } })); break; }
+          throw lastErr;
+        }
+        if (mi && lastErr) throw lastErr;   // запасная модель недоступна по другой причине — показываем исходную перегрузку
+        if ([400, 401, 403].includes(r.status)) { if (/API key|API_KEY|permission|PERMISSION/i.test(msg) || r.status !== 400) throw { code: "not_granted", message: msg }; throw { code: "upstream_error", message: msg }; }
+        throw { code: "upstream_error", message: msg };
+      }
     }
+    throw lastErr || { code: "upstream_error", message: "ИИ недоступен" };
   },
   async parts(input, opts) {
     const parts = [{ text: String(input).replace(/\b([A-Z]{2})(\d{2})([A-Z0-9]{11,30})\b/g, (m, c) => c + "00XXXX") }];
@@ -344,7 +357,7 @@ function renderConn() {
   ];
   const stAi = hasKey ? [el("div", { class: "m" }, "Ключ сохранён на этом телефоне. ИИ раскладывает траты по категориям."), el("details", null, el("summary", null, "Изменить или удалить ключ"), el("div", { style: "display:flex;flex-direction:column;gap:8px;margin-top:8px" }, stForm))] : stForm;
   if (aiMsg) stAi.push(el("div", { class: "m" + (/^✓/.test(aiMsg) ? "" : " bad") }, aiMsg));
-  const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set("gm", v); } } }));
+  const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set("gm", v); } } }), el("div", { class: "m" }, "Запасная модель (если основная отвечает 503): "), el("input", { type: "text", value: AI.fallback() || CFG.fallbackModel, onchange: ev => { const v = ev.target.value.trim(); kvSet("model2", v); ls.set("gm2", v); } }));
   const inst = standalone();
   const body = [
     el("h2", null, gateMode ? "Настроим «Кошелёк»" : "Подключения"),
