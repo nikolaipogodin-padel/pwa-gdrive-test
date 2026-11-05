@@ -281,7 +281,7 @@ const css = `
 #kwPill{position:fixed;z-index:60;top:calc(env(safe-area-inset-top,0px) + 6px);right:8px;height:30px;min-width:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line,#dfe4e9);background:var(--surface,#fff);color:var(--muted,#5b6873);font:600 .78rem var(--f,system-ui);display:inline-flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 1px 3px rgb(0 0 0/.12)}
 #kwPill i{width:9px;height:9px;border-radius:50%;background:var(--muted,#888);display:inline-block}
 #kwPill.ok i{background:var(--ok,#2f7a4a)}#kwPill.sync i,#kwPill.pending i{background:var(--warn,#8a5d00)}#kwPill.error i,#kwPill.conflict i,#kwPill.login i{background:var(--bad,#a83a2c)}
-#kwPill.ok span,#kwPill.sync span{display:none}
+#kwPill.ok span,#kwPill.sync span,#kwPill.pending span{display:none}
 #kwDlg{border:0;border-radius:20px;background:var(--surface,#fff);color:var(--ink,#14212b);width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 32px);padding:0;overflow:auto;box-shadow:0 20px 60px rgb(0 0 0/.3);font:15px/1.45 var(--f,system-ui)}
 #kwDlg::backdrop{background:rgb(10 20 26/.55)}
 @media(max-width:719px){#kwDlg{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:20px 20px 0 0;max-height:92vh}}
