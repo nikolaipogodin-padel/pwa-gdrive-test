@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f6f5c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Кошелёк · тест</title>
+<style>
+  :root{--bg:#f6f7f5;--fg:#1d2420;--card:#fff;--ac:#1f6f5c;--bad:#b3261e;--ok:#1b7a3a;--mut:#667}
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:12px 12px 80px}
+  h1{font-size:20px;margin:4px 0 12px}
+  .card{background:var(--card);border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 3px #0002}
+  h2{font-size:16px;margin:0 0 8px}
+  button{min-height:48px;padding:0 14px;margin:4px 4px 4px 0;border:0;border-radius:10px;background:var(--ac);color:#fff;font-size:15px}
+  button.sec{background:#e3e8e5;color:var(--fg)}
+  input{width:100%;min-height:44px;padding:8px;border:1px solid #bbb;border-radius:8px;font-size:15px;margin:4px 0}
+  .log{font:12px/1.35 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;background:#101614;color:#cfe;border-radius:8px;padding:8px;margin-top:8px;max-height:220px;overflow:auto}
+  .st{font-size:13px;color:var(--mut)}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<h1>Кошелёк · тест платформы <span class="st" id="ver">v1</span></h1>
+
+<div class="card" id="c4">
+  <h2>4. PWA и офлайн</h2>
+  <div class="st" id="pwaInfo">…</div>
+  <button class="sec" id="bPersist">Запросить persist()</button>
+  <button class="sec" id="bIdb">Счётчик запусков (IndexedDB)</button>
+  <div class="log" id="log4"></div>
+</div>
+
+<div class="card" id="c1">
+  <h2>1. Google Drive (appDataFolder)</h2>
+  <div class="st">Client ID (OAuth, Web application):</div>
+  <input id="cid" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off">
+  <button id="bSave">Запомнить ID</button>
+  <button id="bLogin">Войти и записать</button>
+  <button class="sec" id="bRead">Прочитать файл</button>
+  <button class="sec" id="bSilent">Тихое обновление токена</button>
+  <button class="sec" id="bList">Список файлов appData</button>
+  <div class="st" id="tokInfo">токена нет</div>
+  <div class="log" id="log1"></div>
+</div>
+
+<div class="card" id="c3">
+  <h2>3. Gemini из браузера телефона</h2>
+  <div class="st">Ключ из Google AI Studio (хранится только в этом браузере):</div>
+  <input id="gk" placeholder="AIza…" autocomplete="off">
+  <input id="gm" value="gemini-3.5-flash-lite">
+  <button id="bGSave">Запомнить ключ</button>
+  <button id="bG1">Один запрос</button>
+  <button id="bG3">3 параллельных пакета по 40</button>
+  <div class="log" id="log3"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const L=(n,m,cls)=>{const e=$('log'+n);e.textContent+=new Date().toLocaleTimeString()+' '+m+'\n';e.scrollTop=e.scrollHeight};
+const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v);return true}catch(e){return false}}};
+
+/* ---------- 4. PWA ---------- */
+function pwaInfo(){
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  $('pwaInfo').textContent='Режим: '+(standalone?'установлено (standalone)':'вкладка браузера')+
+   ' · онлайн: '+navigator.onLine+' · SW: '+('serviceWorker' in navigator?'есть':'нет')+
+   ' · URL: '+location.origin;
+}
+pwaInfo();
+addEventListener('online',pwaInfo);addEventListener('offline',pwaInfo);
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(r=>L(4,'SW зарегистрирован, scope '+r.scope)).catch(e=>L(4,'SW ошибка: '+e));
+}
+$('bPersist').onclick=async()=>{
+  try{
+    const before=await navigator.storage.persisted();
+    const res=await navigator.storage.persist();
+    const est=navigator.storage.estimate?await navigator.storage.estimate():{};
+    L(4,'persisted до='+before+', persist()='+res+', usage='+est.usage+', quota='+est.quota);
+  }catch(e){L(4,'persist ошибка: '+e)}
+};
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('walletTest',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbCount(){
+  const db=await idb();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction('k','readwrite'),s=tx.objectStore('k'),g=s.get('runs');
+    g.onsuccess=()=>{const n=(g.result||0)+1;s.put(n,'runs');s.put(new Date().toISOString(),'last');tx.oncomplete=()=>res(n)};
+    tx.onerror=()=>rej(tx.error);
+  });
+}
+$('bIdb').onclick=async()=>{try{L(4,'Запуск № '+await idbCount()+' (счётчик должен расти после перезапуска и после очистки — обнуляться)')}catch(e){L(4,'IDB ошибка: '+e)}};
+idbCount().then(n=>L(4,'Автозапись при открытии: запуск № '+n)).catch(e=>L(4,'IDB ошибка: '+e));
+
+/* ---------- 1. Google Drive ---------- */
+const SCOPE='https://www.googleapis.com/auth/drive.appdata';
+let tokenClient=null,token=null,tokenAt=0;
+$('cid').value=ls.get('cid')||'';
+$('bSave').onclick=()=>{ls.set('cid',$('cid').value.trim());L(1,'Client ID сохранён');tokenClient=null};
+function showTok(){
+  $('tokInfo').textContent=token?('токен получен '+Math.round((Date.now()-tokAtSafe())/1000)+' с назад'):'токена нет';
+}
+const tokAtSafe=()=>tokenAt||Date.now();
+setInterval(showTok,5000);
+function loadGIS(){
+  return new Promise((res,rej)=>{
+    if(window.google&&google.accounts&&google.accounts.oauth2)return res();
+    const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>res();s.onerror=()=>rej(new Error('GIS не загрузился (нет сети?)'));
+    document.head.appendChild(s);
+  });
+}
+async function getToken(prompt){
+  const cid=ls.get('cid');
+  if(!cid)throw new Error('Нет Client ID');
+  await loadGIS();
+  return new Promise((res,rej)=>{
+    const t0=Date.now();
+    tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:cid,scope:SCOPE,prompt:prompt,
+      callback:r=>{
+        if(r.error)return rej(new Error(r.error+(r.error_description?': '+r.error_description:'')));
+        token=r.access_token;tokenAt=Date.now();
+        L(1,'токен получен за '+(Date.now()-t0)+' мс, expires_in='+r.expires_in+', scope='+r.scope);
+        res(token);
+      },
+      error_callback:e=>rej(new Error('GIS: '+(e.type||'')+' '+(e.message||'')))
+    });
+    tokenClient.requestAccessToken({prompt:prompt});
+  });
+}
+async function api(path,opt){
+  const r=await fetch('https://www.googleapis.com/'+path,Object.assign({headers:{Authorization:'Bearer '+token}},opt));
+  if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,300));
+  return r;
+}
+async function findFile(){
+  const r=await api('drive/v3/files?spaces=appDataFolder&q='+encodeURIComponent("name='wallet_test.json'")+'&fields=files(id,name,modifiedTime,size)');
+  return (await r.json()).files;
+}
+async function writeFile(){
+  const body={stamp:new Date().toISOString(),ua:navigator.userAgent,n:Math.random()};
+  const ex=await findFile();
+  const meta=ex.length?{}:{name:'wallet_test.json',parents:['appDataFolder']};
+  const bd='b'+Math.random().toString(36).slice(2);
+  const payload='--'+bd+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bd+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(body)+'\r\n--'+bd+'--';
+  const url=ex.length?'upload/drive/v3/files/'+ex[0].id+'?uploadType=multipart&fields=id,modifiedTime':'upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime';
+  const r=await api(url,{method:ex.length?'PATCH':'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+bd},body:payload});
+  L(1,'записано: '+JSON.stringify(await r.json())+' ; содержимое '+JSON.stringify(body).slice(0,60)+'…');
+  ls.set('lastWrite',JSON.stringify(body));
+}
+$('bLogin').onclick=async()=>{
+  try{
+    const consented=ls.get('consented')==='1';
+    await getToken(consented?'':'consent');
+    ls.set('consented','1');
+    await writeFile();
+  }catch(e){L(1,'ОШИБКА: '+e.message)}
+};
+$('bRead').onclick=async()=>{
+  try{
+    if(!token)await getToken(ls.get('consented')==='1'?'':'consent');
+    const f=await findFile();
+    if(!f.length)return L(1,'файла нет');
+    const r=await api('drive/v3/files/'+f[0].id+'?alt=media');
+    L(1,'прочитано: '+(await r.text()).slice(0,200));
+  }catch(e){L(1,'ОШИБКА: '+e.message)}
+};
+$('bSilent').onclick=async()=>{
+  try{
+    token=null;
+    const t0=Date.now();
+    L(1,'запрос без prompt… (если открылось окно — это НЕ тихо)');
+    await getToken('');
+    L(1,'итог: токен получен за '+(Date.now()-t0)+' мс');
+  }catch(e){L(1,'ОШИБКА тихого обновления: '+e.message)}
+};
+$('bList').onclick=async()=>{
+  try{
+    if(!token)await getToken(ls.get('consented')==='1'?'':'consent');
+    const r=await api('drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime,size)');
+    L(1,JSON.stringify((await r.json()).files));
+  }catch(e){L(1,'ОШИБКА: '+e.message)}
+};
+
+/* ---------- 3. Gemini ---------- */
+$('gk').value=ls.get('gk')||'';
+$('bGSave').onclick=()=>{ls.set('gk',$('gk').value.trim());L(3,'ключ сохранён локально')};
+function names(n,seed){
+  const base=['COFFEE ADDRESS SIA','PLAYTOMIC.IO','CIRCLE K','MAXIMA LV','Rimi SHM','LIDL','BOLT.EU','APOTHEKA','Padel SIA','Infinity Padel','KSenukai','DECATHLON','www.mobilly.lv','Volvo','MEGO RIGA','BETA VEIKALS'];
+  const a=[];for(let i=0;i<n;i++)a.push(base[(i+seed)%base.length]+' '+(100+((i*7+seed*13)%900))+' RIGA');return a;
+}
+async function gem(batch,tag){
+  const key=ls.get('gk'),model=$('gm').value.trim();
+  if(!key)throw new Error('нет ключа');
+  const prompt='Сгруппируй контрагентов выписки по категориям расходов (Продукты, Кафе и рестораны, Транспорт, Спорт, Аптека, Покупки, Прочее). Ответ — только JSON-массив объектов {"name":..., "cat":...}.\n'+JSON.stringify(batch);
+  const t0=Date.now();
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',{
+    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json'}})
+  });
+  const ms=Date.now()-t0;
+  let txt=await r.text(),j=null;try{j=JSON.parse(txt)}catch(e){}
+  const u=j&&j.usageMetadata;
+  L(3,tag+' HTTP '+r.status+' '+ms+' мс'+(u?' токены: in='+u.promptTokenCount+' out='+u.candidatesTokenCount:'')+(r.ok?'':' | '+txt.slice(0,200)));
+  return r.status;
+}
+$('bG1').onclick=async()=>{try{await gem(names(5,0),'1×5')}catch(e){L(3,'ОШИБКА: '+e.message)}};
+$('bG3').onclick=async()=>{
+  try{
+    const res=await Promise.all([0,1,2].map(i=>gem(names(40,i),'пакет '+(i+1)).catch(e=>{L(3,'пакет '+(i+1)+' ОШИБКА '+e.message);return 0})));
+    L(3,'коды: '+res.join(', ')+(res.includes(429)?' ← есть 429 (лимит)':''));
+  }catch(e){L(3,'ОШИБКА: '+e.message)}
+};
+</script>
+</body>
+</html>
