@@ -10308,7 +10308,7 @@ $("recForm").addEventListener("submit", async ev => {
         const nums = rd.rules.map(r => +String(r.id || "").replace(/^\D+/, "")).filter(Number.isFinite);
         let at = rd.rules.findIndex(r => r.layer === "starter"); if (at < 0) at = rd.rules.length;
         rd.rules.splice(at, 0, { id: `R${(nums.length ? Math.max(...nums) : 0) + 1}`, pattern: pat, dir: "out", type: "Расход", group, sub, src: `запись в аппе ${nowStr().slice(0, 10)}: «${mk}»` });
-        rd.version = (rd.version || 0) + 1; S.book.rules = rd; madeRule = mk;
+        rd.version = (rd.version || 0) + 1; S.book.rules = rd; madeRule = mk; logEv("rule", "трата картой: " + mk + " → " + group + " / " + sub);
       } else if (pat) madeRule = "уже есть: " + mk;
     }
     reapply();
@@ -10997,7 +10997,7 @@ document.addEventListener("click", async ev => {
 
 <script>
 document.addEventListener("click",ev=>{if(ev.target.closest("#kwConn"))window.KOSHELEK.openConn()});
-document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
+document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
 window.addEventListener("koshelek-ai",async()=>{try{S.sample=await window.claude.use("sample");if(S.inputs&&typeof drawAll==="function")drawAll()}catch(e){}});
 window.addEventListener("koshelek-ai-wait",ev=>{const n=document.getElementById("kwAiNote");if(!n)return;clearTimeout(n._t);if(!ev.detail){n.hidden=true;return}n.hidden=false;n.textContent="ИИ занят, пробую снова через "+ev.detail.s+" с ("+ev.detail.n+" из "+ev.detail.of+")";n._t=setTimeout(()=>{n.hidden=true},20000)});
 /* зелёные подтверждения («Сохранено…», «Добавлено…») гаснут сами через 6 с */

@@ -12,6 +12,10 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
+const BUILD = "П12.1 · 05.11.2026";
+const _pre = [];
+/* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
+const plog = (k, d) => { try { if (typeof window.logEv === "function") { while (_pre.length) window.logEv(..._pre.shift()); window.logEv(k, d); } else _pre.push([k, d]); } catch (e) { } };
 
 /* ============ хранилище: IndexedDB + память ============ */
 const DBN = "koshelek-w";
@@ -131,7 +135,7 @@ async function gunzip(buf) { const s = new Blob([buf]).stream().pipeThrough(new 
 const SLOTS = ["koshelek-1.gz", "koshelek-2.gz", "koshelek-3.gz"];
 const Sync = {
   state: "off", msg: "", timer: null, busy: false, conflict: null, lastCheck: 0, onState: null,
-  set(state, msg) { this.state = state; this.msg = msg || ""; this.onState?.(); },
+  set(state, msg) { this.state = state; this.msg = msg || ""; if (state !== this._ls) { this._ls = state; plog("sync", state + (msg ? " · " + msg : "")); } this.onState?.(); },
   consented() { return kv.consented === true && !!Auth.cid(); },
   touch(fromOtherTab) { if (!fromOtherTab && kv.dirty !== true) { kvSet("dirty", true); } if (!this.consented()) { this.set(kv.consented ? "error" : "off", kv.consented ? "Нет Client ID" : "Не подключён"); return; } if (this.state !== "conflict") this.set("pending", "Ждёт отправки"); clearTimeout(this.timer); this.timer = setTimeout(() => this.run().catch(() => { }), CFG.syncDelayMs); },
   snapshot(rev) { const docs = {}; for (const [k, v] of mem) docs[k] = v; return JSON.stringify({ v: 1, rev, device: kv.device, savedAt: new Date().toISOString(), docs }); },
@@ -168,6 +172,7 @@ const Sync = {
     } catch (e) { this.fail(e); } finally { this.busy = false; }
   },
   fail(e) {
+    plog("sync-err", String(e?.code || "") + " " + String(e?.message || e).slice(0, 100));
     const c = e?.code || "";
     if (["popup", "popup_failed_to_open", "popup_closed", "timeout", "access_denied", "immediate_failed", "interaction_required", "user_cancel"].includes(c) || e?.status === 401) this.set("login", "Нужно подтвердить вход");
     else if (!navigator.onLine || e instanceof TypeError) this.set("offline", "Нет сети — отправится позже");
@@ -213,8 +218,8 @@ const AI = {
       if (r.ok) { if (a) window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: null })); return r.json(); }
       let j = null; try { j = await r.json(); } catch (e) { }
       const msg = j?.error?.message || ("HTTP " + r.status);
-      if (r.status === 429) throw { code: "rate_limited", message: msg };
-      if ([500, 502, 503, 504].includes(r.status)) { if (a < delays.length) { const w = delays[a] + Math.random() * 800; window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { s: Math.round(w / 1000), n: a + 1, of: delays.length } })); await sleep(w); continue; } throw { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" }; }
+      if (r.status === 429) { plog("ai-err", "429 лимит"); } if (r.status === 429) throw { code: "rate_limited", message: msg };
+      if ([500, 502, 503, 504].includes(r.status)) { if (a < delays.length) { const w = delays[a] + Math.random() * 800; plog("ai-retry", r.status + " · повтор " + (a + 1) + " из " + delays.length); window.dispatchEvent(new CustomEvent("koshelek-ai-wait", { detail: { s: Math.round(w / 1000), n: a + 1, of: delays.length } })); await sleep(w); continue; } throw { code: "upstream_error", message: "ИИ перегружен, попробуйте позже (" + r.status + ")" }; }
       if ([400, 401, 403].includes(r.status)) { if (/API key|API_KEY|permission|PERMISSION/i.test(msg) || r.status !== 400) throw { code: "not_granted", message: msg }; throw { code: "upstream_error", message: msg }; }
       throw { code: "upstream_error", message: msg };
     }
@@ -399,7 +404,7 @@ const readyP = (async () => {
   Sync.set(Sync.consented() ? (kv.dirty ? "pending" : "ok") : "off", "");
 })();
 async function afterAppStart() {
-  mountUI();
+  mountUI(); plog("platform", BUILD + " · google " + (Sync.consented() ? "вкл" : "выкл") + " · ключ " + (AI.key() ? "есть" : "нет"));
   if (!Sync.consented()) return;
   setTimeout(() => Sync.check(true), 2500);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { if (Date.now() - Sync.lastCheck > 60000) Sync.check(false); } else if (kv.dirty) Sync.run().catch(() => { }); });
@@ -420,5 +425,5 @@ const use = async name => {
   return null;
 };
 window.claude = Object.freeze({ use });
-window.KOSHELEK = { openConn, Sync, AI, mem, kv, db };
+window.KOSHELEK = { openConn, Sync, AI, mem, kv, db, build: BUILD };
 })();
