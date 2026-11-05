@@ -5502,7 +5502,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* журнал работы (meta/log, личный раздел): нажатия, вкладки, действия с длительностью, обращения к ИИ, ошибки.
    Сумм, названий и текстов операций нет. Нужен, чтобы разбирать, где человек застревает. Пишется не чаще раза в 20 с и при уходе со страницы. */
-const LOG = { ev: [], dirty: false, timer: null };
+const LOG = { ev: [], learn: [], dirty: false, timer: null };
 function logEv(k, d) {
   LOG.ev.push([new Date().toISOString().slice(0, 19), k, d == null ? "" : String(d).slice(0, 160)]);
   if (LOG.ev.length > 500) LOG.ev.splice(0, LOG.ev.length - 500);
@@ -5514,7 +5514,7 @@ async function flushLog() {
   if (!LOG.dirty || !DBX.db || S.conflict || !S.canWrite) return;
   if (S.busy) { LOG.timer = setTimeout(flushLog, 5000); return; }
   LOG.dirty = false;
-  try { await DBX.put("meta", "log", { app: APP_VERSION, events: LOG.ev }); S.saved.set("meta/log", "log"); } catch (e) { LOG.dirty = true; }
+  try { await DBX.put("meta", "log", { app: APP_VERSION, events: LOG.ev, learn: LOG.learn }); S.saved.set("meta/log", "log"); } catch (e) { LOG.dirty = true; }
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLog(); });
 document.addEventListener("click", ev => {
@@ -5966,7 +5966,7 @@ const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : 
   }
   catch (e) { $("updated").textContent = e?.code === "revoked" ? "Доступ к данным закрыт." : "Ошибка чтения данных [" + (e?.code || "?") + "]. Обновите страницу."; return; }
   const meta = raw.meta || {};
-  LOG.ev = ((meta.log && meta.log.events) || []).slice(-500); logEv("open", `${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
+  LOG.ev = ((meta.log && meta.log.events) || []).slice(-500); LOG.learn = ((meta.log && meta.log.learn) || []).slice(-300); logEv("open", `${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
   S.inputs = { profile: meta.profile || null, state: meta.state || null, rules: meta.rules || null, journal: raw.journal, edits: raw.edits, cash: raw.cash, pending: raw.pending, uploads: raw.uploads, suggest: meta.suggest || { items: {} } };
   S.saveId = meta.state ? meta.state.save_id || null : null;
   for (const c of COLS) for (const [id, doc] of Object.entries(raw[c])) S.saved.set(c + "/" + id, sig(doc));
@@ -8902,43 +8902,50 @@ const payKind = pt => /CTX|card/i.test(pt || "") ? "карта" : /^(MK|IZP|PRV|
 const notesBlock = () => { const t = (String(profile()?.claude_notes || "").trim() + learnNotes()).trim(); return t ? `Человек сам объяснил, как раскладывать его траты, — это важнее общих правил ниже:\n${t.slice(0, 1500)}\n` : ""; };
 /* назначение для ИИ: без номеров карт и счетов */
 const cleanInfo = t => String(t || "").replace(/\d{4,}\*+\d*/g, "****").replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/g, "IBAN").replace(/\s+/g, " ").trim();
+/* П12.4: компактный справочник «Тип: Группа [подстатьи]» вместо JSON */
+const catText = types => Object.entries(types).map(([t, gs]) => `${t}: ` + Object.entries(gs).map(([g, s]) => s.length ? `${g} [${s.join(", ")}]` : g).join("; ")).join("\n");
+/* назначение без дат, длинных номеров и ссылок — они не помогают определить категорию */
+const infoTxt = t => cleanInfo(t).replace(/(?<![\d.,])\d{1,6}[.,]\d{2}(?![\d.,])(\s*(EUR|€))?/gi, "").replace(/\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b/g, "").replace(/\b[A-Z0-9]{12,}\b/g, "").replace(/\b\d{5,}\b/g, "").replace(/\s+/g, " ").trim();
+const tokSet = s => new Set(String(s || "").toLowerCase().split(/[^\p{L}]+/u).filter(w => w.length >= 3));
+/* примеры человека: сначала похожие на эту пачку по словам, затем самые частые — до 20 */
+function relevantExamples(chunk, opt) {
+  const all = personExamples(opt, 200); if (!all.length) return [];
+  const toks = tokSet(chunk.map(x => x.name + " " + x.ops.slice(0, 3).map(o => o.info).join(" ")).join(" "));
+  const sc = all.map((l, i) => { const m = l.split(" → ")[0]; let s = 0; for (const w of tokSet(m)) if (toks.has(w)) s++; return [s, i, l]; });
+  const hit = sc.filter(a => a[0] > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 12).map(a => a[2]);
+  const rest = sc.filter(a => !hit.includes(a[2])).slice(0, 20 - hit.length).map(a => a[2]);
+  return [...hit, ...rest];
+}
 function suggestPrompt(chunk, types, opt = {}) {
-  const own = ownNames(), mine = personExamples(opt), cos = S.inputs.suggest?.companies || {};
-  // П10.4 (5): назначения — полнее (раньше 3 по 80 символов); повторный разбор неизвестных компаний — все назначения целиком
-  const nEx = opt.deep ? 10 : 4, nCh = opt.deep ? 300 : 160;
-  const noAmt = t => String(t).replace(/(?<![\d.,])\d{1,6}[.,]\d{2}(?![\d.,])(\s*(EUR|€))?/gi, "").replace(/\s{2,}/g, " ");
+  const own = ownNames(), mine = relevantExamples(chunk, opt), cos = S.inputs.suggest?.companies || {};
+  const nEx = opt.deep ? 8 : 3, nCh = opt.deep ? 260 : 120;
   const lines = chunk.map((x, i) => {
-    const ex = [...new Set(x.ops.map(o => noAmt(cleanInfo(o.info)).slice(0, nCh)))].slice(0, nEx).join(" ¦ ") + (cos[x.name.toLowerCase()]?.text ? ` | догадка ИИ о компании из прошлого разбора (не проверено): ${cos[x.name.toLowerCase()].text}` : "");
-    const am = x.ops.map(o => Math.abs(o.a)), lo = Math.min(...am), hi = Math.max(...am);
+    const seen = new Set(), exs = [];
+    for (const o of x.ops) { const t = infoTxt(o.info).slice(0, nCh), k = t.toLowerCase().replace(/\d+/g, "#"); if (t && !seen.has(k)) { seen.add(k); exs.push(t); } if (exs.length >= nEx) break; }
+    const ex = exs.join(" ¦ ") + (cos[x.name.toLowerCase()]?.text ? ` | догадка ИИ (не проверено): ${cos[x.name.toLowerCase()].text}` : "");
     const ds = x.ops.map(o => o.d).sort(), per = ds[0].slice(0, 7) === ds[ds.length - 1].slice(0, 7) ? ds[0].slice(0, 7) : ds[0].slice(0, 7) + "…" + ds[ds.length - 1].slice(0, 7);
     const pays = [...new Set(x.ops.map(o => payKind(o.pt)))].join("/");
     return `${i + 1} | ${x.dir} | ${x.name} | ${pays} | ${x.ops.length} | ${per} | ${ex}`;
   });
-  return `Ты раскладываешь банковские операции человека по категориям личного учёта (Латвия, EUR). Работай внимательно: по каждой группе сначала прочитай название, способ оплаты, суммы, период и описания, потом выбирай категорию.${opt.deep ? "\nЭто повторная проверка: в прошлый раз категорию не определили. Прочитай все назначения целиком и реквизиты — по ним часто видно, за что платёж." : ""}
-Каждая строка — группа операций одного контрагента: номер | направление (out — списание, in — поступление) | название | способ (карта / перевод) | число операций | период | примеры описаний.
-Справочник (тип → группа → подстатьи), выбирай строго из него: ${JSON.stringify(types)}
-${mine.length ? `Как раскладывает этот человек — держись этого: та же трата у другого продавца идёт в ту же подстатью.
-${mine.join("\n")}
-` : ""}${notesBlock()}Правила:
-- Покупки, услуги, счета, налоги, штрафы, комиссии — "Расход".
-- Поступление, которое возвращает деньги за трату, — "Расход" с группой этой траты (апп запишет его возвратом): возврат покупки; перевод от человека с назначением, по которому видна трата (обед, ужин, кофе, падел, гольф, баня, билеты, поездка, подарок) — группа этой траты; страховая выплата или компенсация (atlīdzība, izmaksa, kompensācija, Izmaksu akts) — группа того, что компенсировано: лечение — «Здоровье», авто — «Авто».
-- Зарплата, пенсия, пособия, субсидии, возврат налога — "Доход".
-- Переводы между своими счетами, снятие и взнос наличных, погашение кредитной карты — "Перемещение".${own.length ? `
-- Владелец счетов — ${own.join(", ")}. Переводы от него самого и ему самому (в том числе «Sent from Revolut», «Sent to Revolut», «To ${own[0]}», из других своих банков) — "Перемещение", подстатья про свои счета; это не доход и не расход.` : ""}
-- Погашение тела кредита — "Погашение долга".
-- kind — кто получатель или отправитель: "company" (компания, магазин, сервис, сайт, учреждение), "person" (частное лицо), "own" (свои счета, наличные).
-- Перевод человеку или от человека без понятного назначения — unknown: true, kind "person", без группы: такие операции человек разложит сам. Не угадывай доход.
-- Для компании (SIA, AS, магазин, сервис, сайт) сначала определи её основной вид деятельности: что ты знаешь об этой компании, слова в названии (nomā — аренда, serviss — сервис, auto, aptieka — аптека, veikals — магазин, kafejnīca, krogs — кафе, mazgātava — мойка, degviela — топливо, apdrošināšana — страхование, stāvvieta, parking — парковка), назначения платежей, город и страну. Профиль коротко — в profile («автостоянка», «оптовая торговля»), категорию выбирай по нему, а не по случайному слову.
-- «Догадка ИИ о компании» в строке — прошлое предположение, не факт: сверь с названием и назначениями; одна она — не основание для confidence "high".
-- Не знаешь, что это за компания, и по назначениям не понять — unknown: true, kind "company", why — чего не хватает. «Прочее / Прочее» — не замена «не знаю»: ставь его, только если трата действительно прочая.
-- Если в справочнике есть узкая подстатья для этой траты — выбирай её, а не общую.
-- confidence "high" — только если категория очевидна; иначе "low".
-- rule: true — если у контрагента и дальше будет та же категория (магазин, сервис, подписка, коммунальные, страховка); false — переводы людям и разовые операции.
-- marker: короткий текст из названия без номеров и дат, который есть во всех операциях группы.
-- why: одно короткое предложение (до 10 слов): что предполагаешь и на каком основании; догадку пиши как догадку — «возможно доставка еды, по названию», а не как факт.
-Категорий вне справочника не придумывай.
-Верни только JSON-массив, по объекту на каждую группу: [{"k":1,"kind":"company","type":"Расход","group":"…","sub":"…","confidence":"high","rule":true,"marker":"…","why":"…","profile":"…"}]; если не знаешь — {"k":2,"kind":"company","unknown":true,"why":"…"}
-Группы:
+  // неизменная часть — в начале (одинакова во всех запросах: провайдер кэширует общий префикс), изменяемая — в конце
+  return `Ты раскладываешь банковские операции человека по категориям личного учёта (Латвия, EUR). По каждой группе прочитай название, способ, период и описания, затем выбери категорию.
+Строка группы: № | out (списание) / in (поступление) | название | способ (карта/перевод) | операций | период | описания. Сумм в запросе нет — они не нужны.
+Справочник «Тип: Группа [подстатьи]» — выбирай строго из него:
+${catText(types)}
+Правила:
+- Расход: покупки, услуги, счета, налоги, штрафы, комиссии. Доход: зарплата, пенсия, пособия, субсидии, возврат налога. Перемещение: между своими счетами, снятие и взнос наличных, погашение кредитной карты. «Погашение долга»: тело кредита.
+- Поступление, которое возвращает трату, — "Расход" с группой этой траты (апп запишет возвратом): возврат покупки; перевод от человека с назначением-тратой (обед, кофе, падел, гольф, баня, билеты, поездка, подарок); страховая выплата или компенсация (atlīdzība, izmaksa, kompensācija) — группа компенсированного (лечение — «Здоровье», авто — «Авто»).
+- kind: "company" (компания, магазин, сервис, сайт, учреждение), "person" (частное лицо), "own" (свои счета, наличные).
+- Перевод человеку или от человека без понятного назначения — unknown: true, kind "person", без группы. Доход не угадывай.
+- Компанию определяй по основному виду деятельности: что знаешь о ней, слова в названии (nomā аренда, serviss сервис, aptieka аптека, veikals магазин, kafejnīca/krogs кафе, mazgātava мойка, degviela топливо, apdrošināšana страхование, stāvvieta/parking парковка), назначения, город. Категория — по виду деятельности, не по случайному слову. profile — 2–4 слова («автостоянка»).
+- «Догадка ИИ» — прошлое предположение, не факт; одна она не даёт "high".
+- Компания неизвестна и по назначениям не понять — unknown: true, kind "company", why: чего не хватает. «Прочие расходы / Прочие расходы» не заменяют «не знаю»: только если трата действительно прочая.
+- Есть узкая подстатья — выбирай её, а не общую. Вне справочника ничего не придумывай.
+- confidence "high" — только если категория очевидна, иначе "low".
+- rule: true — у контрагента всегда будет эта категория (магазин, сервис, подписка, коммунальные, страховка); переводы людям и разовые — false. marker — короткий текст из названия без номеров и дат, который есть во всех операциях группы (нужен при rule: true).
+- why — до 8 слов: основание; догадку пиши как догадку («возможно доставка еды, по названию»).
+Ответ — только JSON-массив, по объекту на группу: {"k":1,"kind":"company","type":"…","group":"…","sub":"…","confidence":"high","rule":true,"marker":"…","why":"…","profile":"…"}. Не знаешь: {"k":2,"kind":"company","unknown":true,"why":"…"}. rule, marker и profile — только когда нужны.
+${own.length ? `Владелец счетов — ${own.join(", ")}. Переводы от него и ему самому (в том числе «Sent from/to Revolut», «To ${own[0]}», из других его банков) — "Перемещение", подстатья про свои счета; не доход и не расход.\n` : ""}${notesBlock()}${mine.length ? `Как раскладывает этот человек — держись этого: та же трата у другого продавца идёт в ту же подстатью.\n${mine.join("\n")}\n` : ""}${opt.deep ? "Повторная проверка: в прошлый раз категорию не определили. Читай назначения целиком — по ним часто видно, за что платёж.\n" : ""}Группы:
 ${lines.join("\n")}`;
 }
 /* запрос к ИИ по группам: по 60 за раз, два запроса одновременно (больше платформа ставит в очередь); ответ вне справочника — без категории.
@@ -8988,6 +8995,20 @@ async function askClaude(groups, { signal, progress, noClaude, onPart } = {}) {
   const hard = groups.filter(x => { const a = out.get(bk(x)); if (!a) return true; if (a.unknown && a.kind === "person") return false; return auto ? a.conf !== "high" : a.unknown; });
   if (hard.length && !out.stopped) await run(hard, auto ? "complex" : aiModel(), "уточнение", true);
   out.miss = groups.filter(x => !out.has(bk(x))).length;
+  if (!noClaude) try {   // П12.4: что апп не распознала сама, а ИИ определил уверенно — в журнал (для улучшения автономной работы)
+    let hi = 0, lo = 0, unk = 0;
+    for (const x of groups) {
+      const a = out.get(bk(x)); if (!a) continue;
+      if (a.unknown) { unk++; continue; }
+      if (a.conf !== "high") { lo++; continue; }
+      hi++;
+      const ex = infoTxt(x.ops[0].info).slice(0, 70);
+      LOG.learn.push([new Date().toISOString().slice(0, 16), x.name.slice(0, 40), x.dir, [...new Set(x.ops.map(o => payKind(o.pt)))].join("/"), x.ops.length, `${a.type}/${a.group}/${a.sub}`, a.rule ? (a.marker || "").slice(0, 30) : "", ex, (a.why || "").slice(0, 50)]);
+    }
+    if (LOG.learn.length > 300) LOG.learn.splice(0, LOG.learn.length - 300);
+    LOG.dirty = true; if (!LOG.timer) LOG.timer = setTimeout(flushLog, 20000);
+    logEv("ai-sum", `${groups.length} гр. без правила: уверенно ${hi}, неуверенно ${lo}, не знает ${unk}, без ответа ${out.miss}`);
+  } catch (e) { console.error(e); }
   return out;
 }
 async function suggestAll(only) {
@@ -9656,7 +9677,8 @@ $("inDrop").addEventListener("drop", e => { const fs = [...(e.dataTransfer?.file
 function promptFor(text, hasImage) {
   const cat = catGroups(); const groups = {};
   Object.entries(cat).forEach(([g, subs]) => { if (g !== "❓") groups[g] = subs; });
-  const hints = (S.catalog?.hints || []).slice(0, 120).map(h => `${h.p} → ${h.g} / ${h.s}`).join("\n");
+  const hintAll = S.catalog?.hints || [], hintHit = text && !hasImage ? hintAll.filter(h => { try { return new RegExp(h.p, "i").test(text); } catch (e) { return false; } }) : [];
+  const hints = (hintHit.length ? hintHit.slice(0, 30) : hintAll.slice(0, 60)).map(h => `${h.p} → ${h.g} / ${h.s}`).join("\n");
   const d = new Date(); const wd = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"][d.getDay()];
   return `Ты разбираешь траты пользователя для личного учёта. Валюта EUR. Сегодня ${todayISO()} (${wd}).
 Верни только JSON-массив объектов вида {"date":"YYYY-MM-DD","amount":12.5,"desc":"короткое название места или покупки","kind":"card","group":"…","sub":"…","confidence":"high","acct_tail":null}.
@@ -9668,7 +9690,7 @@ function promptFor(text, hasImage) {
 - acct_tail — последние 4 цифры номера счёта (IBAN), если он виден на скриншоте банковского приложения (например в заголовке); иначе null. Для всех операций одного скриншота одно значение.
 - group и sub строго из справочника ниже; если не уверен — ближайшие и confidence "low".
 - Не выдумывай: сумму, которую нельзя прочитать, пропусти. Итоговые суммы и остатки со скриншота не включай.
-Справочник групп и подстатей: ${JSON.stringify(groups)}
+Справочник «Группа [подстатьи]»: ${Object.entries(groups).map(([g, s]) => s.length ? `${g} [${s.join(", ")}]` : g).join("; ")}
 Подсказки по контрагентам (regex → группа / подстатья):
 ${hints}
 ${hasImage ? `${hasImage > 1 ? `Изображений — ${hasImage}, разбери каждое.` : ""} На изображении — скриншот банковского приложения или чек. Каждая операция — отдельный объект. Для чека — одна запись на весь чек.` : ""}
@@ -11010,7 +11032,7 @@ document.addEventListener("click", async ev => {
 
 <script>
 document.addEventListener("click",ev=>{if(ev.target.closest("#kwConn"))window.KOSHELEK.openConn()});
-document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
+document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200),learn:(LOG.learn||[]).slice(-150)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
 window.addEventListener("koshelek-ai",async()=>{try{S.sample=await window.claude.use("sample");if(S.inputs&&typeof drawAll==="function")drawAll()}catch(e){}});
 window.addEventListener("koshelek-ai-wait",ev=>{const n=document.getElementById("kwAiNote");if(!n)return;clearTimeout(n._t);if(!ev.detail){n.hidden=true;return}n.hidden=false;n.textContent=ev.detail.fb?"Основная модель занята, пробую запасную: "+ev.detail.fb:"ИИ занят, пробую снова через "+ev.detail.s+" с ("+ev.detail.n+" из "+ev.detail.of+")";n._t=setTimeout(()=>{n.hidden=true},20000)});
 
