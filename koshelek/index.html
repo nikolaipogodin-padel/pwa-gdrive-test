@@ -7505,10 +7505,19 @@ function qGroups() {
 /* операции без категории в истории, которую ещё не начинали разбирать */
 const histLeft = () => histOpen() ? [] : qOpsAll().filter(o => !inFocus(o));
 const qCount = () => qGroups().reduce((a, x) => a + x.ops.length, 0);
+const KW_SMALLIN = "Мелкие переводы от людей", KW_SMALLIN_MAX = 20;
+function kwSmallIn(o) {
+  if (!(o.a > 0) || o.a > KW_SMALLIN_MAX || isManual(o) || payKind(o.pt) === "карта") return false;
+  const info = String(o.info || ""), cp = String(cpText(o) || "");
+  if (!(/\b\d{6}-\d{5}\b/.test(info) || personLike(cp))) return false;
+  if (/revolut|paysend|atg\.|atgr|return|refund|atgriez|pusdien|vakarin|brokast|kafij|padel|golf|pirts|bilet|degviel|обед|ужин/i.test(info)) return false;
+  const up = info.toUpperCase(); if (ownNames().some(n => n && up.includes(String(n).toUpperCase()))) return false;
+  return true;
+}
 function groupOps(list, tag) {
   const g = new Map();
   for (const o of list) {
-    const dir = o.a > 0 ? "in" : "out", name = markerOf(cpText(o)) || String(cpText(o)).trim().slice(0, 40) || "без названия";
+    const dir = o.a > 0 ? "in" : "out", name = kwSmallIn(o) ? KW_SMALLIN : (markerOf(cpText(o)) || String(cpText(o)).trim().slice(0, 40) || "без названия");
     // П10.8: человек и посредник — отдельно по назначению платежа: разные по смыслу переводы одному человеку не подтверждаются вместе
     const key = dir + "|" + name.toLowerCase() + (STOP_MARKER.test(name) ? "|" + o.id : "") + (byPurpose(name, o) ? "|" + (purposeOf(o) || "—").toLowerCase() : "");
     let x = g.get(key); if (!x) g.set(key, x = { key: tag ? key + "|" + tag : key, base: key, hist: !!tag, name, dir, ops: [] });
@@ -7541,6 +7550,7 @@ function localIndex() {
   return map;
 }
 function localSuggest(x) {
+  if (x.name === KW_SMALLIN) return { type: "Доход", group: "Доход", sub: KW_SMALLIN, rule: false, marker: "", conf: "high", by: "правило аппа", why: "поступления от людей до " + KW_SMALLIN_MAX + " € — одной группой" };
   const cnt = localIndex().get(x.base || x.key);
   if (!cnt || !cnt.size) return null;
   const [k] = [...cnt].sort((a, b) => b[1] - a[1])[0];
@@ -7637,7 +7647,7 @@ function qHint(x) {
   const s = sugItems()[bk(x)] || learnSuggest(x) || localSuggest(x);
   const pr = coProfile(x), prof = pr && pr.text ? (/^ИИ/.test(pr.src || "ИИ") ? `<div class="qg-info">Предположение ИИ о компании: ${esc(pr.text)} <span class="muted">· по названию и назначениям, не проверено</span></div>` : `<div class="qg-info">Компания: ${esc(pr.text)} <span class="muted">· ${esc(pr.src)}</span></div>`) : "";   // П10.5: догадка ИИ — не факт
   if (!s) return S.sug?.busy ? '<div class="qg-hint muted">ИИ думает…</div>' : "";
-  const lbl = s.by === "как вы ответили раньше" ? "Как вы отвечали раньше" : s.by === "обучение" ? "Обучение" : "Подсказка ИИ";
+  const lbl = s.by === "как вы ответили раньше" ? "Как вы отвечали раньше" : s.by === "обучение" ? "Обучение" : s.by === "правило аппа" ? "Правило" : "Подсказка ИИ";
   if (s.unknown || !s.group) { const kt = s.kind === "person" ? " — перевод человеку без понятного назначения" : s.kind === "company" ? " — неизвестно, чем занимается компания" : "", why = String(s.why || "").trim();
     return `<div class="qg-hint"><b>${lbl}:</b> не удалось определить${kt}${why && !kt.toLowerCase().includes(why.toLowerCase().replace(/[.\s]+$/, "")) ? `. ${esc(why)}` : ""}</div>${prof}`; }
   return `<div class="qg-hint"><b>${lbl}:</b> ${esc(catLabel(s))}${s.why ? ` — ${esc(s.why)}` : ""}${s.conf === "high" || s.by === "как вы ответили раньше" ? "" : ' <span class="chip q">проверьте</span>'}</div>${prof}`;
@@ -7658,6 +7668,7 @@ function qWhyBase(x, c) {
   const first = t => { t = String(t || "").replace(/\s+/g, " ").trim(); const m = t.match(/^.{8,}?[.;!?](?=\s|$)/); t = (m ? m[0] : t).replace(/[.;]+$/, ""); return t.length > 110 ? t.slice(0, 108).replace(/\s+\S*$/, "") + "…" : t; };
   if (s.by === "как вы ответили раньше") return { k: "Раньше", t: first(s.why) || "вы относили этого получателя сюда" };
   if (s.by === "обучение") return { k: "Обучение", t: first(s.why) };
+  if (s.by === "правило аппа") return { k: "Правило", t: first(s.why) };
   if (s.unknown || !s.group) return s.why ? { k: "ИИ", t: first(s.why) } : null;
   return s.why ? { k: "ИИ", t: first(s.why) } : null;
 }
