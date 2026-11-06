@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П12.11 · 06.11.2026";
+const BUILD = "П12.12 · 06.11.2026";
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
 const plog = (k, d) => { try { if (typeof window.logEv === "function") { while (_pre.length) window.logEv(..._pre.shift()); window.logEv(k, d); } else _pre.push([k, d]); } catch (e) { } };
@@ -491,5 +491,7 @@ const use = async name => {
   return null;
 };
 window.claude = Object.freeze({ use });
+/* имя пользователя латиницей (Алина → alina): не источник дохода — переводы «от себя» */
+window.KW_NOINC = () => { try { const n = String((curProf() || {}).name || "").trim().toLowerCase(); if (!n) return []; const M = {а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"j",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sh",ы:"i",э:"e",ю:"ju",я:"ja",ь:"",ъ:""}; const l = [...n].map(c => M[c] != null ? M[c] : c).join(""); return [...new Set([n, l])].filter(x => x.length >= 3); } catch (e) { return []; } };
 window.KOSHELEK = { openConn, openUsers, profile: curProf, Sync, AI, mem, kv, db, build: BUILD };
 })();

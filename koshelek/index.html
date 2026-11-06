@@ -1581,8 +1581,8 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <button type="button" class="sa-conn sa-plain" id="kwUser"><span class="sa-t">Пользователь</span><span class="sa-v" id="kwUserV"></span></button>
     <button type="button" class="sa-conn" id="kwConn"><span class="sa-t">Подключения</span><span class="sa-v" id="kwConnV"></span></button>
     <details class="sa" id="saProf"><summary><span class="sa-t">Профиль и доход</span><span class="sa-v" id="saProfV"></span></summary><div class="sa-b">
-      <label class="sa-h" for="sName">Имя</label>
-      <div class="inline"><input id="sName" type="text" maxlength="40" aria-label="Ваше имя" placeholder="Ваше имя"><button class="btn" type="button" id="sNameSave">Сохранить</button></div>
+      <div hidden><label class="sa-h" for="sName">Имя</label>
+      <div class="inline"><input id="sName" type="text" maxlength="40" aria-label="Ваше имя" placeholder="Ваше имя"><button class="btn" type="button" id="sNameSave">Сохранить</button></div></div>
       <div class="sa-h">Признаки дохода</div>
       <div class="chips" id="sInc"></div>
       <div class="inline"><input id="sIncNew" type="text" maxlength="60" placeholder="Например: SIA DARBA DEVĒJS" aria-label="Признак дохода"><button class="btn" type="button" id="sIncAdd">Добавить</button></div>
@@ -3014,7 +3014,12 @@ function saveState(book) { book.state.statements = sortedStatements(book.state);
 // ───────────────────────── правила и классификация ─────────────────────────
 
 function compiledRules(rulesDoc) {
-  return rulesDoc.rules.map((r) => ({ r, re: pyRegex(r.pattern, true), de: r.desc ? pyRegex(r.desc, true) : null }));
+  const NO = typeof globalThis.KW_NOINC === 'function' ? globalThis.KW_NOINC() : [];
+  return rulesDoc.rules.map((r) => {
+    let pat = r.pattern;
+    if (r.src === 'профиль: признак дохода') pat = NO.includes(String(r.pattern).replace(/\\(.)/g, '$1').toLowerCase()) ? '(?!x)x' : '(?<![A-Za-zĀ-ſ])' + r.pattern;   // П12.12: «alina» не ловит GALINA; своё имя — не доход
+    return { r, re: pyRegex(pat, true), de: r.desc ? pyRegex(r.desc, true) : null };
+  });
 }
 /** 1.8.0. Нормализованный текст для правил словаря (norm): без диакритики, заглавные, знаки — пробелы (как в словаре v3.5.2). */
 function normText(s) {
@@ -3071,7 +3076,7 @@ function incomeRules(profile, existing = []) {
   let k = 1;
   for (const m of markers) {
     const pat = pyEscape(pyStrip(String(m)));
-    if ([...pyStrip(String(m))].length < 3 || have.has(pat.toLowerCase())) continue;
+    if ([...pyStrip(String(m))].length < 3 || have.has(pat.toLowerCase()) || (typeof globalThis.KW_NOINC === 'function' && globalThis.KW_NOINC().includes(String(m).trim().toLowerCase()))) continue;
     while (ids.has('P' + k)) k++;
     ids.add('P' + k);
     have.add(pat.toLowerCase());
@@ -7158,6 +7163,13 @@ function catNoteText(f, k) {
 }
 /* П10.4 (3), П11-1. Источники дохода — до главной: поступления за ВСЮ загруженную историю по отправителю, с исходными назначениями банка.
    Одна и та же операция из пересекающихся выписок — одна запись журнала (код архива банка), поэтому не задваивается */
+function kwSelf(name) {
+  const no = typeof KW_NOINC === "function" ? KW_NOINC() : [];
+  const ws = String(name).toLowerCase().split(/[^a-zа-яāčēģīķļņšūž]+/).filter(Boolean);
+  if (!no.some(n => ws.includes(n))) return false;
+  if (ws.length === 1 || ws.some(w => /^(revolut|paysend|sent|pogodin)/.test(w))) return true;
+  return ownNames().some(on => ws.some(w => w.length > 3 && !no.includes(w) && on.toLowerCase().includes(w)));
+}
 function incomeCandidates() {
   const g = new Map(), own = new Set(ownNames().map(n => markerOf(n).toUpperCase())), ownK = ownKeys();
   for (const o of allOps()) {
@@ -7166,6 +7178,7 @@ function incomeCandidates() {
     if (isManual(o) || !(o.a > 0) || !(o.t === "❓" || o.t === "Доход") || W.INCOME_NOT?.test(o.info || "")) continue;
     if (o.t === "Доход" && o.s === "Проценты банка") continue;   // П11-2: проценты банка определены ядром — не источник дохода
     const name = markerOf(cpText(o));
+    if (name && kwSelf(name)) continue;
     if (!name || own.has(name.toUpperCase()) || ownK.has(nameKey(name))) continue;   // переводы от себя — не доход
     const x = g.get(name) || { name, sum: 0, n: 0, months: new Set(), income: false, ops: [] };
     x.sum += o.a; x.n++; x.months.add(String(o.d).slice(0, 7)); if (o.t === "Доход") x.income = true;
@@ -10455,6 +10468,7 @@ function ruleRow(r) {
   if (isIncomeRule(r)) {
     if (S.incEd === r.id) return `<div class="rule-ed" data-incrule="${esc(r.id)}"><b class="small">Источник дохода</b>
     <input type="text" data-incmarker maxlength="60" value="${esc(S.incEdVal != null ? S.incEdVal : plainPat(r.pattern))}" aria-label="Признак отправителя">
+    <select data-incsub aria-label="Категория дохода">${Object.entries(S.catalog?.types?.["Доход"] || {}).flatMap(([g, ss]) => g === "❓" ? [] : ss.filter(v => v !== "❓").map(v => `<option value="${esc(g + "|" + v)}"${g === r.group && v === r.sub ? " selected" : ""}>${esc(g === "Доход" ? v : g + " · " + v)}</option>`)).join("")}</select>
     <span class="small muted">Поступления с этим признаком — доход «${esc(r.sub)}». Перевод на своё имя и возвраты сюда не попадают.</span>
     <div class="row" style="justify-content:space-between"><button type="button" class="linkbtn danger" data-ruledel="${esc(r.id)}">Убрать из доходов</button><span class="row"><button type="button" class="btn" data-incno="1">Отмена</button><button type="button" class="btn primary" data-incsave="1">Сохранить</button></span></div></div>`;
     return `<button type="button" class="op" data-ruleinc="${esc(r.id)}" aria-label="${esc(plainPat(r.pattern) + ". Управлять")}"><span class="cp">${esc(plainPat(r.pattern))}</span><span class="amt small muted">›</span>${meta}</button>`;
@@ -10560,8 +10574,13 @@ document.addEventListener("click", async ev => {
   const r = (S.book?.rules?.rules || []).find(x => x.id === id); if (!r || val.length < 3) return;
   const ms = (profile()?.income?.markers || []), old = ms.find(m => W._py.pyEscape(W._py.pyStrip(m)).toLowerCase() === String(r.pattern).toLowerCase());
   const next = ms.filter(m => m !== old).concat(ms.includes(val) && val !== old ? [] : [val]);
+  const subV = String(box.querySelector("[data-incsub]")?.value || "");
   S.incEd = null; S.incEdVal = null;
   await setIncome(next, true);
+  if (subV.includes("|")) await act("Сохраняю…", () => {
+    const rd = clone(S.book.rules), pat = W._py.pyEscape(W._py.pyStrip(val)).toLowerCase(), rr = rd.rules.find(x => isIncomeRule(x) && String(x.pattern).toLowerCase() === pat), [g, s] = subV.split("|");
+    if (rr && (rr.group !== g || rr.sub !== s)) { rr.group = g; rr.sub = s; rd.version = (rd.version || 0) + 1; S.book.rules = rd; reapply(); }
+  });
 });
 document.addEventListener("click", ev => { const b = ev.target.closest("[data-rf2]"); if (!b) return; S.ruleF = b.dataset.rf2; S.ruleEd = null; rulesDraw(); });
 $("sRuleQ").addEventListener("input", () => { S.ruleEd = null; rulesDraw(); });
@@ -11090,7 +11109,7 @@ const set=(id,t)=>{const e=g(id);if(e&&e.textContent!==t)e.textContent=t};
 const pl=(n,a,b,c)=>{const m=n%100,d=n%10;return n+" "+(m>10&&m<20?c:d===1?a:d>1&&d<5?b:c)};
 function upd(){try{const K=window.KOSHELEK;if(!K)return;
 set("kwUserV",K.profile?K.profile().name:"");set("kwConnV",(K.Sync.consented()?"Диск "+(ST[K.Sync.state]||""):"Диск выкл")+" · ключ "+(K.AI.key()?"есть":"нет"));
-const nm=(g("sName")||{}).value||"";set("saProfV",(nm||"без имени")+" · "+pl(document.querySelectorAll("#sInc .chip").length,"признак","признака","признаков"));
+const nm=(g("sName")||{}).value||"";set("saProfV",pl(document.querySelectorAll("#sInc .chip").length,"признак","признака","признаков"));
 set("saAccV",pl(document.querySelectorAll("#sAcc .acc-row").length,"счёт","счёта","счетов"));
 const ai=g("sAI");set("saAIV",(ai&&ai.selectedOptions[0]?ai.selectedOptions[0].text.split(" — ")[0]:"")+(g("sAuto")&&g("sAuto").checked?" · без подтверждения":""));}catch(e){}}
 setInterval(upd,1500);document.addEventListener("click",()=>setTimeout(upd,200));document.addEventListener("input",()=>setTimeout(upd,200));addEventListener("koshelek-ai",()=>setTimeout(upd,200));})();
