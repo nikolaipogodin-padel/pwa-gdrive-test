@@ -7555,7 +7555,7 @@ function localIndex() {
   const map = new Map();
   const mine = new Set((S.book?.rules?.rules || []).filter(r => !r.layer || r.layer === "personal").map(r => r.id));
   for (const o of ops) {
-    if (o.t === "❓" || isManual(o) || !(o.r === "правка" || mine.has(o.r))) continue;   // общие и стартовые правила срабатывают по тексту, а не по контрагенту
+    if (o.t === "❓" || isManual(o) || !(o.r === "правка" || mine.has(o.r)) || (o.g === "Прочие расходы" && o.s === "Прочие расходы")) continue;   // общие и стартовые правила срабатывают по тексту, а не по контрагенту
     const nm = markerOf(cpText(o));
     if (!nm || STOP_MARKER.test(nm)) continue;
     const key = (o.a > 0 ? "in" : "out") + "|" + nm.toLowerCase() + (byPurpose(nm, o) ? "|" + (purposeOf(o) || "—").toLowerCase() : "");
