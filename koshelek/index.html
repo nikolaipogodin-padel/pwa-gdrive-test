@@ -3992,7 +3992,7 @@ function fcCost(o) {
 const mlab = (m) => `${RU_MON[parseInt(m.slice(5), 10) - 1]} ${m.slice(0, 4)}`;
 const rn = (x, n = 2) => pyFixed(x, n).replace('.', ',');
 function fcNorm(o) {
-  const base = truthy(o.cp) && o.cp !== '—' ? o.cp : o.info.split(':')[0];
+  const base = truthy(o.cp) && o.cp !== '—' ? o.cp : kwNice(o.info, pget(o, 'pay_type', ''));
   const w = base.toUpperCase().replace(/[^A-ZĀ-Ž ]/gu, ' ').split(' ').filter((x) => x.length && !['SIA', 'AS', 'LV', 'RIGA'].includes(x));
   return w.slice(0, 3).sort(cmpStr).join(' ');
 }
@@ -4088,7 +4088,7 @@ function buildForecast(journal, asOfDate, cfg, { covered = null } = {}) {
   const disp = new Map();
   const cardRe = pyRegex(CARDNO, false, 'g');
   for (const o of ops.slice().sort((a, b) => cmpStr(a.date, b.date))) {
-    disp.set(K.get(o), (o.sub + ' · ' + (truthy(o.cp) && o.cp !== '—' ? o.cp : o.info.split(':')[0])).replace(cardRe, ''));
+    disp.set(K.get(o), (o.sub + ' · ' + (truthy(o.cp) && o.cp !== '—' ? o.cp : kwNice(o.info, pget(o, 'pay_type', '')))).replace(cardRe, ''));
   }
   for (const o of ops) { const k = K.get(o); if (k.startsWith('regular:') && !regular.has(k)) K.set(o, 'variable'); }
 
@@ -5492,7 +5492,21 @@ const dayDiff = (a, b) => Math.round((new Date(b + "T00:00:00Z") - new Date(a + 
 const monthEnd = m => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5), 0)).toISOString().slice(0, 10);
 const fmtStamp = s => { const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(String(s || "")); return m ? `${m[3]}.${m[2]} ${m[4]}` : (s || "—"); };
 const fmtPeriod = p => String(p || "").replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3.$2.$1").replace(" … ", " – ");
-const cpText = o => (o.cp && o.cp !== "—") ? o.cp : (o.info || "");
+const KW_CITY = /\s+(?:R[^\s]ga|Riga|Tallinn|Tartu|Rezekne|Jelgava|Liepaja|Daugavpils|Jurmala|Valmiera|Ventspils|Ogre|Sigulda|Salaspils|Marupe|Olaine|Adazi|Cesis|Jekabpils|Saldus|Tukums|Kuldiga|Talsi|Dobele|Bauska|Vilnius|Kaunas|Dublin|Luxembourg|Amsterdam)$/i;
+function kwNice(info, pt) {
+  const t = String(info || "").replace(/\s+/g, " ").trim();
+  const m = /^\d{2}\/\d{2}\/\d{4} \d{6}\*+\d{4} MCC-(\d{4}) REF:\s*(.*)$/.exec(t);
+  if (m) {
+    let s = m[2].replace(/\s+[A-Z]{2,5}\d{3,}$/, "").replace(/\s+[A-Z]{2}$/, "").replace(KW_CITY, "").trim();
+    const d = s.lastIndexOf("-"); if (d >= 3 && d < s.length - 1 && !/\d/.test(s.slice(d + 1))) s = s.slice(0, d);
+    s = s.replace(/[-\/\s]+$/, "");
+    if (!s) return t;
+    return m[1] === "6011" ? "Банкомат " + s : s;
+  }
+  if (/^Value Date:/i.test(t)) { const p = String(pt || ""); return /interest/i.test(p) ? "Проценты банка" : /tax/i.test(p) ? "Налог на проценты" : t; }
+  return t;
+}
+const cpText = o => (o.cp && o.cp !== "—") ? o.cp : kwNice(o.info || "", o.pt);
 const isManual = o => o.src === "Наличные" || o.src === "Предварительно" || String(o.id).startsWith("CASH-") || String(o.id).startsWith("PND-");
 const pickErr = (map, e, dflt) => (map[e?.code] || dflt) + (e?.code ? ` [${e.code}]` : "");
 const nowStr = () => W._py.nowStr();
