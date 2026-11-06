@@ -7600,7 +7600,9 @@ const catOK = c => !!c && !!(S.catalog?.types?.[c.type === "Возврат" ? "�
 const readyChoice = c => !!(c && c.type && c.group && c.sub);
 /* без подсказки — запасной вариант, чекбокс пустой: списанию — «Прочее → Прочее»; поступлению — ничего, тип и категорию выбираете сами */
 function qPrefill(x) {
-  return x.dir !== "in" ? { type: "Расход", group: "Прочие расходы", sub: "Прочие расходы" } : null;   // П10.8: поступлению расходная «Прочее» не подставляется
+  if (x.dir === "in") return null;
+  const s = sugItems()[bk(x)], person = (s && s.kind === "person") || (personLike(x.name) && x.ops.every(o => payKind(o.pt) !== "карта"));
+  return person ? { type: "Расход", group: "Переводы людям", sub: "Переводы людям" } : { type: "Расход", group: "Прочие расходы", sub: "Прочие расходы" };   // П10.8: поступлению расходная «Прочее» не подставляется
 }
 function choiceOf(x) {
   if (S.qEdit[x.key]) return S.qEdit[x.key];
