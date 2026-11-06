@@ -1580,7 +1580,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   <section id="p-set" role="tabpanel" aria-labelledby="t-set" hidden>
     <button type="button" class="sa-conn sa-plain" id="kwUser"><span class="sa-t">Пользователь</span><span class="sa-v" id="kwUserV"></span></button>
     <button type="button" class="sa-conn" id="kwConn"><span class="sa-t">Подключения</span><span class="sa-v" id="kwConnV"></span></button>
-    <details class="sa" id="saProf"><summary><span class="sa-t">Профиль и доход</span><span class="sa-v" id="saProfV"></span></summary><div class="sa-b">
+    <details class="sa" id="saProf"><summary><span class="sa-t">Источники дохода</span><span class="sa-v" id="saProfV"></span></summary><div class="sa-b">
       <div hidden><label class="sa-h" for="sName">Имя</label>
       <div class="inline"><input id="sName" type="text" maxlength="40" aria-label="Ваше имя" placeholder="Ваше имя"><button class="btn" type="button" id="sNameSave">Сохранить</button></div></div>
       <div class="sa-h">Признаки дохода</div>
@@ -3780,7 +3780,8 @@ function applyEdits(book, docs) {
     if (op === undefined) warns.push(`правка ${tx}: операции нет в журнале (возможно, она придёт со следующей выпиской)`);
     if (pget(e, 'state') === 'применена') continue;
     newEdits.push({ tx, date: pget(e, 'date'), cp: pget(e, 'cp'), amount: pget(e, 'amount'), was: pget(e, 'was'), to: [e.type, e.group, e.sub], note: pget(e, 'note', '') });
-    const marker = pyStrip(truthy(pget(e, 'marker')) ? String(e.marker) : '');
+    let marker = pyStrip(truthy(pget(e, 'marker')) ? String(e.marker) : '');
+    if (/^Банкомат(\s|$)/.test(marker)) { const rest = marker.slice(8).trim(); marker = 'MCC-6011' + (rest ? ' REF: ' + rest : ''); }
     if (!(truthy(pget(e, 'make_rule')) && marker)) continue;
     const pat = pyEscape(marker);
     const text = op ? `${op.cp} | ${op.info}` : null;
