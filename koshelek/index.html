@@ -5502,7 +5502,7 @@ function kwNice(info, pt) {
   const t = String(info || "").replace(/\s+/g, " ").trim();
   const m = /^\d{2}\/\d{2}\/\d{4} \d{6}\*+\d{4} MCC-(\d{4}) REF:\s*(.*)$/.exec(t);
   if (m) {
-    let s = m[2].replace(/\s+[A-Z]{2,5}\d{3,}$/, "").replace(/\s+[A-Z]{2}$/, "").replace(KW_CITY, "").trim();
+    let s = m[2].replace(/\s+\d{4,}$/, "").replace(/\s+[A-Z]{2,5}\d{3,}$/, "").replace(/\s+[A-Z]{2}$/, "").replace(KW_CITY, "").replace(/^\d{4,}\s+/, "").replace(/\s+\d{4,}$/, "").trim();
     const d = s.lastIndexOf("-"); if (d >= 3 && d < s.length - 1 && !/\d/.test(s.slice(d + 1))) s = s.slice(0, d);
     s = s.replace(/[-\/\s]+$/, "");
     if (!s) return t;
@@ -7457,7 +7457,7 @@ RENDER.ops = function () {
 $("opsQGo").addEventListener("click", () => { S.qPer = null; selectTab("q"); });
 RENDER.questions = function () {
   const groups = qGroups(), V = qView(groups), onb = onbStep() === 3;
-  const items = sugItems(), pend = V.per0.filter(x => !items[bk(x)] && !localSuggest(x)).length;
+  const items = sugItems(), pend = V.per0.filter(x => (!items[bk(x)] || kwRedo(items[bk(x)])) && !localSuggest(x)).length;
   const sug = S.sug || {}, consent = profile()?.consent?.claude_classify;
   // ИИ — одна строка над списком, не карточка (П10.8)
   const showAI = !!(sug.busy || sug.err || (pend && S.sample && consent !== false));
@@ -7585,6 +7585,17 @@ function ruleImpact(x, marker, c) {
   const changed = hits.filter(o => o.t !== "❓" && !((o.t === "Возврат" ? "Расход" : o.t) === t && o.g === c.group && o.s === c.sub));
   return { hits: hits.length, changed };
 }
+/* П12.8: ИИ часто называет категорию чуть иначе (нет типа, регистр, не та группа) — чиним, если однозначно. 1/2 — формальная правка, 3 — по уникальной подстатье (уверенность «проверьте») */
+function kwFix(c) {
+  if (catOK(c)) return 0;
+  const T = S.catalog?.types || {}, low = s => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+  const order = [...new Set([c.type === "Возврат" ? "Расход" : c.type, "Расход", "Доход", "Перемещение", ...Object.keys(T)])];
+  if (c.group && c.sub) for (const t of order) if ((T[t]?.[c.group] || []).includes(c.sub)) { c.type = t; return 1; }
+  for (const t of order) for (const [g, subs] of Object.entries(T[t] || {})) if (low(g) === low(c.group)) { const s = subs.find(v => low(v) === low(c.sub)); if (s) { c.type = t; c.group = g; c.sub = s; return 2; } }
+  if (c.sub) { const hits = []; for (const t of Object.keys(T)) for (const [g, subs] of Object.entries(T[t])) if (g !== "❓" && subs.includes(c.sub)) hits.push([t, g]); if (hits.length === 1) { c.type = hits[0][0]; c.group = hits[0][1]; return 3; } }
+  return 0;
+}
+const kwRedo = it => !!it && it.unknown === true && it.by === "Claude" && it.kind === "company" && it.v !== "r2";
 const catOK = c => !!c && !!(S.catalog?.types?.[c.type === "Возврат" ? "Расход" : c.type]?.[c.group] || []).includes(c.sub);
 const readyChoice = c => !!(c && c.type && c.group && c.sub);
 /* без подсказки — запасной вариант, чекбокс пустой: списанию — «Прочее → Прочее»; поступлению — ничего, тип и категорию выбираете сами */
@@ -8876,7 +8887,7 @@ async function maybeSuggest() {
   if (smallOps().length) await autoSmall();
   if (onbStep() === 1 || onbStep() === 2) return;   // П11-1: ИИ — после дохода, перед «Операциями»
   if (S.sug?.busy || profile()?.consent?.claude_classify !== true) return;
-  const need = qGroups().some(x => !sugItems()[bk(x)] && !localSuggest(x));
+  const need = qGroups().some(x => (!sugItems()[bk(x)] || kwRedo(sugItems()[bk(x)])) && !localSuggest(x));
   if (need && S.sample && !S.sugTried) { S.sugTried = true; await suggestAll(); return; }   // в конце suggestAll сам применит ответы
   await autoApply();
 }
@@ -8993,14 +9004,16 @@ async function askClaude(groups, { signal, progress, noClaude, onPart } = {}) {
       for (const r of res) {
         const x = r && chunk[(parseInt(r.k, 10) || 0) - 1]; if (!x) continue;
         const c = { type: String(r.type || "") === "Возврат" ? "Расход" : String(r.type || ""), group: String(r.group || ""), sub: String(r.sub || "") };
+        const fx = kwFix(c); if (fx === 3) r.confidence = "low";
         const ok = catOK(c), kind = ["company", "person", "own"].includes(r.kind) ? r.kind : "";
         // П10.4 (5): «не знаю» — отдельное состояние; «Прочее / Прочее» без уверенности — тоже «не знаю», а не категория
         const unknown = r.unknown === true || !ok || (c.group === "Прочие расходы" && c.sub === "Прочие расходы" && r.confidence !== "high");
+        if (!ok && r.unknown !== true && (r.group || r.sub) && (out.dropN = (out.dropN || 0) + 1) <= 8) logEv("ai-drop", `${x.name.slice(0, 30)} ← ${r.type}/${r.group}/${r.sub}`);
         const prof = String(r.profile || "").replace(/\s+/g, " ").trim().slice(0, 80);
         if (prof && kind !== "person") { const cos = S.inputs.suggest.companies = S.inputs.suggest.companies || {}; cos[x.name.toLowerCase()] = { text: prof, src: "ИИ: по названию и назначениям платежей", at: nowStr() }; }
-        out.set(bk(x), unknown ? { type: "", group: "", sub: "", unknown: true, kind, rule: false, marker: "", conf: "low", why: String(r.why || "").slice(0, 100), by: "Claude", pv: promptVer(), at: nowStr() }
+        out.set(bk(x), unknown ? { type: "", group: "", sub: "", unknown: true, kind, rule: false, marker: "", conf: "low", why: String(r.why || "").slice(0, 100), by: "Claude", v: "r2", pv: promptVer(), at: nowStr() }
           : { type: ok || types[c.type] ? c.type : "", group: c.group, sub: c.sub, kind, rule: r.rule === true,
-          marker: String(r.marker || "").slice(0, 60), conf: r.confidence === "high" ? "high" : "low", why: String(r.why || "").slice(0, 80), by: "Claude", pv: promptVer(), at: nowStr() });
+          marker: String(r.marker || "").slice(0, 60), conf: r.confidence === "high" ? "high" : "low", why: String(r.why || "").slice(0, 80), by: "Claude", v: "r2", pv: promptVer(), at: nowStr() });
       }
       done += chunk.length;
       if (onPart) try { onPart(chunk.map(x => [bk(x), out.get(bk(x))]).filter(([, v]) => v)); } catch (e) { console.error(e); }
@@ -9026,14 +9039,14 @@ async function askClaude(groups, { signal, progress, noClaude, onPart } = {}) {
     }
     if (LOG.learn.length > 300) LOG.learn.splice(0, LOG.learn.length - 300);
     LOG.dirty = true; if (!LOG.timer) LOG.timer = setTimeout(flushLog, 20000);
-    logEv("ai-sum", `${groups.length} гр. без правила: уверенно ${hi}, неуверенно ${lo}, не знает ${unk}, без ответа ${out.miss}`);
+    logEv("ai-sum", `${groups.length} гр. без правила: уверенно ${hi}, неуверенно ${lo}, не знает ${unk}, без ответа ${out.miss}, отброшено ${out.dropN || 0}`);
   } catch (e) { console.error(e); }
   return out;
 }
 async function suggestAll(only) {
   if (!S.sample || S.sug?.busy) return;
   const items = sugItems();
-  const groups = qGroups().filter(x => (!only || only(x)) && !items[bk(x)] && !localSuggest(x));   // П10.8: из разбора — только выбранный период
+  const groups = qGroups().filter(x => (!only || only(x)) && (!items[bk(x)] || kwRedo(items[bk(x)])) && !localSuggest(x));   // П10.8: из разбора — только выбранный период
   if (!groups.length) return;
   const ctl = new AbortController();
   S.sug = { busy: true, done: 0, total: groups.length, ctl, err: "" };
