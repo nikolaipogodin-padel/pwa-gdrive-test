@@ -3013,12 +3013,33 @@ function saveState(book) { book.state.statements = sortedStatements(book.state);
 
 // ───────────────────────── правила и классификация ─────────────────────────
 
+/* П13 (A0.3): личные правила совпадают с начала слова: BOLT не ловит ĀBOLTIŅA, ERGO — LATVENERGO. Общие и стартовые правила не трогаем (в них «Hotel» намеренно ловит SmartHotel). */
+function kwSplitTop(p) {
+  const out = []; let d = 0, cl = false, cur = '';
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === '\\') { cur += c + (p[++i] || ''); continue; }
+    if (cl) { if (c === ']') cl = false; cur += c; continue; }
+    if (c === '[') { cl = true; cur += c; continue; }
+    if (c === '(') d++; else if (c === ')') d--;
+    if (c === '|' && d === 0) { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  out.push(cur); return out;
+}
+function kwWb(p) {
+  p = String(p);
+  if (/^\(\?[<!=i]/.test(p)) return p;
+  return kwSplitTop(p).map((a) => (/^[A-Za-z0-9Ā-ſА-яЁё]/.test(a) ? '(?<![A-Za-zĀ-ſА-яЁё])' + a : a)).join('|');
+}
 function compiledRules(rulesDoc) {
   const NO = typeof globalThis.KW_NOINC === 'function' ? globalThis.KW_NOINC() : [];
   return rulesDoc.rules.map((r) => {
     let pat = r.pattern;
     if (r.src === 'профиль: признак дохода') pat = NO.includes(String(r.pattern).replace(/\\(.)/g, '$1').toLowerCase()) ? '(?!x)x' : '(?<![A-Za-zĀ-ſ])' + r.pattern;   // П12.12: «alina» не ловит GALINA; своё имя — не доход
-    return { r, re: pyRegex(pat, true), de: r.desc ? pyRegex(r.desc, true) : null };
+    const mine = (!r.layer || r.layer === 'personal') && r.src !== 'профиль: признак дохода';   // П13
+    if (mine) pat = kwWb(pat);
+    return { r, re: pyRegex(pat, true), de: r.desc ? pyRegex(mine ? kwWb(r.desc) : r.desc, true) : null };
   });
 }
 /** 1.8.0. Нормализованный текст для правил словаря (norm): без диакритики, заглавные, знаки — пробелы (как в словаре v3.5.2). */
@@ -3799,7 +3820,7 @@ function applyEdits(book, docs) {
       rulesDoc.rules.splice(at, 0, rule);
       newRules.push(rule);
       const closed = pget(st, 'closed_through', '') || '';
-      const hit = [...journal.values()].filter((o) => isBank(o) && o.id !== tx && (rdir === 'any' || (o.amount > 0 ? 'in' : 'out') === rdir) && pySearch(pat, `${o.cp} | ${o.info}`, true)
+      const hit = [...journal.values()].filter((o) => isBank(o) && o.id !== tx && (rdir === 'any' || (o.amount > 0 ? 'in' : 'out') === rdir) && pySearch(kwWb(pat), `${o.cp} | ${o.info}`, true)
         && [o.type, o.group, o.sub].join('\u0000') !== [e.type, e.group, e.sub].join('\u0000'));
       const opOpen = hit.filter((o) => o.date.slice(0, 7) > closed);
       if (hit.length) {
@@ -4437,7 +4458,7 @@ return {
   // прогноз и документы
   buildForecast, buildForecastFor, exportDocs, opToDoc, docToOp,
   // совместимость с Python (для тестов)
-  _py: { pyRound, pyFixed, pyRepr, pySum, pyStrip, pyEscape, pyFloatStr, cmpStr, translatePyRegex, pyRegex, pySearch, pyCsv, pyLines,
+  _py: { kwWb, pyRound, pyFixed, pyRepr, pySum, pyStrip, pyEscape, pyFloatStr, cmpStr, translatePyRegex, pyRegex, pySearch, pyCsv, pyLines,
          sha1Hex, strptimeDate, migrateJournal, nowStr, mshift, monthEnd, validIso, cpSlice, CP1257, decodeCp1257 },
   // внутренние части разбора (для wallet-learn.js)
   _fmt: { rowsOf, nfc, moneyParser, labelList, maskText, headerRowFor, signatureOf, rowText, lineAmount, csvCell, isoDays, isoOf,
@@ -11134,5 +11155,25 @@ setInterval(()=>{u();ub()},1000);document.addEventListener("click",()=>setTimeou
 /* зелёные подтверждения («Сохранено…», «Добавлено…») гаснут сами через 6 с */
 (()=>{const T=new WeakMap();new MutationObserver(ms=>{for(const m of ms){const e=m.target.nodeType===3?m.target.parentElement:m.target;const n=e&&e.closest&&e.closest(".okmsg");if(!n||!n.textContent)continue;clearTimeout(T.get(n));T.set(n,setTimeout(()=>{if(n.classList.contains("okmsg")){n.textContent="";n.className="small muted"}},6000))}}).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["class"]})})();
 if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+<script>
+/* П13 (A0.3): один раз после обновления — сравнить срабатывание личных правил «как было / с начала слова» на своих операциях; в журнал только id правил и числа */
+window.kwWbAudit = function kwWbAudit(n) {
+  try {
+    if (localStorage.getItem("kw_wb13") === "1") return;
+    if (!(typeof S !== "undefined" && S.book && S.book.rules && typeof allOps === "function" && allOps().length)) { if ((n = (n || 0) + 1) < 6) setTimeout(() => kwWbAudit(n), 8000); return; }
+    const py = W._py, ops = allOps(), out = [];
+    for (const r of S.book.rules.rules) {
+      if (r.layer && r.layer !== "personal") continue;
+      if (r.src === "профиль: признак дохода" || r.norm) continue;
+      let a, b; try { a = py.pyRegex(r.pattern, true); b = py.pyRegex(py.kwWb(r.pattern), true); } catch (e) { continue; }
+      let x = 0, y = 0; for (const o of ops) { const t = (o.cp || "") + " | " + (o.info || ""); if (a.test(t)) x++; if (b.test(t)) y++; }
+      if (x !== y) out.push(r.id + ": " + x + "→" + y);
+    }
+    logEv("rule-wb", out.length ? "срабатывание изменилось у " + out.length + ": " + out.slice(0, 6).join(", ") : "личные правила: без изменений");
+    localStorage.setItem("kw_wb13", "1");
+  } catch (e) { }
+};
+setTimeout(() => window.kwWbAudit(0), 7000);
 </script>
 </body></html>

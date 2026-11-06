@@ -20,7 +20,8 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П12.14 · 06.11.2026";
+const BUILD = "П13.1 · 06.11.2026";
+let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
 const plog = (k, d) => { try { if (typeof window.logEv === "function") { while (_pre.length) window.logEv(..._pre.shift()); window.logEv(k, d); } else _pre.push([k, d]); } catch (e) { } };
@@ -53,6 +54,9 @@ function idbLoadAll() {
     tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
   });
 }
+/* П13 (A0.1): журнал аппа (meta/log) живёт только на устройстве: не помечает данные изменёнными, не входит в копию на Диске и не сливается. Раньше смена статуса синхронизации → журнал → «правка» → отправка → новый статус шла по кругу каждые 20 с. */
+const isLog = p => /(^|\/)meta\/log$/.test(p);
+const docCount = () => { let n = 0; for (const k of mem.keys()) if (!isLog(k)) n++; return n; };
 const kvSet = (k, v) => { kv[k] = v; return idbTx(["kv"], "readwrite", tx => tx.objectStore("kv").put(v, k)).catch(() => { }); };
 
 /* ============ Firestore-подобный интерфейс ============ */
@@ -68,9 +72,9 @@ async function writeDoc(p, data, quiet) {
   } else {
     const v = clone(data); mem.set(p, v); await idbTx(["docs"], "readwrite", tx => tx.objectStore("docs").put(v, p));
   }
-  if (!quiet) { bc?.postMessage({ t: "w", p, d: data === undefined ? null : clone(data), from: TAB }); Sync.touch(); }
+  if (!quiet) { bc?.postMessage({ t: "w", p, d: data === undefined ? null : clone(data), from: TAB }); if (!isLog(p)) Sync.touch(); }
 }
-if (bc) bc.onmessage = ev => { const m = ev.data; if (!m || m.from === TAB) return; if (m.t === "w") { if (m.d === null) mem.delete(m.p); else mem.set(m.p, m.d); fire(m.p); Sync.touch(true); } else if (m.t === "reload") location.reload(); };
+if (bc) bc.onmessage = ev => { const m = ev.data; if (!m || m.from === TAB) return; if (m.t === "w") { if (m.d === null) mem.delete(m.p); else mem.set(m.p, m.d); fire(m.p); if (!isLog(m.p)) Sync.touch(true); } else if (m.t === "reload") location.reload(); };
 const docRef = p => { check(p, true); return {
   id: p.split("/").pop(), path: p,
   async get() { return snap(this.id, mem.get(p)); },
@@ -146,15 +150,16 @@ const Sync = {
   set(state, msg) { this.state = state; this.msg = msg || ""; if (state !== this._ls) { this._ls = state; plog("sync", state + (msg ? " · " + msg : "")); } this.onState?.(); },
   consented() { return kv.consented === true && !!Auth.cid(); },
   touch(fromOtherTab) { if (!fromOtherTab && kv.dirty !== true) { kvSet("dirty", true); } if (!this.consented()) { this.set(kv.consented ? "error" : "off", kv.consented ? "Нет Client ID" : "Не подключён"); return; } if (this.state !== "conflict") this.set("pending", "Ждёт отправки"); clearTimeout(this.timer); this.timer = setTimeout(() => this.run().catch(() => { }), CFG.syncDelayMs); },
-  snapshot(rev) { const docs = {}; for (const [k, v] of mem) docs[k] = v; return JSON.stringify({ v: 1, rev, device: kv.device, savedAt: new Date().toISOString(), docs }); },
+  snapshot(rev) { const docs = {}; for (const [k, v] of mem) if (!isLog(k)) docs[k] = v; return JSON.stringify({ v: 1, rev, device: kv.device, savedAt: new Date().toISOString(), docs }); },
   async remote() {   // лучшая корректная копия на Диске
     const files = (await drive.list()).filter(f => SLOTS.includes(f.name)).sort((a, b) => (+b.appProperties?.rev || 0) - (+a.appProperties?.rev || 0));
     return files;
   },
   async load(f) { const data = JSON.parse(await gunzip(await drive.download(f.id))); if (!data || typeof data.docs !== "object" || !Object.keys(data.docs).length) throw new Error("пустая копия"); return data; },
   async replaceLocal(data) {
-    await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of Object.entries(data.docs)) st.put(v, k); });
-    mem.clear(); for (const [k, v] of Object.entries(data.docs)) mem.set(k, v);
+    const docs = Object.assign({}, data.docs); for (const [k, v] of mem) if (isLog(k)) docs[k] = v;   // П13: журнал этого устройства не затирается копией с Диска
+    await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of Object.entries(docs)) st.put(v, k); });
+    mem.clear(); for (const [k, v] of Object.entries(docs)) mem.set(k, v);
     await kvSet("baseRev", +data.rev || 0); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
     bc?.postMessage({ t: "reload", from: TAB });
   },
@@ -189,7 +194,7 @@ const Sync = {
   },
   async run(force) {
     if (!this.consented() || (this.busy && !force) || (this.conflict && !force)) return;
-    if (!mem.size) { this.set("ok", "Синхронизировано"); return; }
+    if (!docCount()) { this.set("ok", "Синхронизировано"); return; }
     this.busy = true; this.set("sync", "Отправляю на Диск…");
     try {
       const files = await this.remote(), R = files[0] ? +files[0].appProperties?.rev || 0 : 0;
@@ -199,7 +204,7 @@ const Sync = {
       }
       const rev = Math.max(R, +kv.baseRev || 0) + 1, bytes = await gzip(this.snapshot(rev));
       const slot = SLOTS.map(n => files.find(f => f.name === n) || { name: n, rev: -1 }).sort((a, b) => (+a.appProperties?.rev || a.rev || 0) - (+b.appProperties?.rev || b.rev || 0))[0];
-      await drive.upload(slot.id || null, slot.name, bytes, { rev: String(rev), device: kv.device, savedAt: new Date().toISOString(), docs: String(mem.size) });
+      await drive.upload(slot.id || null, slot.name, bytes, { rev: String(rev), device: kv.device, savedAt: new Date().toISOString(), docs: String(docCount()) });
       await kvSet("baseRev", rev); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
       this.set("ok", "Синхронизировано");
     } catch (e) { this.fail(e); } finally { this.busy = false; }
@@ -222,6 +227,7 @@ const Sync = {
       };
       const own = data.device === kv.device, out = new Map(mem); let changed = false;
       if (!own) for (const [k, rv] of Object.entries(data.docs)) {
+        if (isLog(k)) continue;
         if (!mem.has(k)) { out.set(k, rv); changed = true; continue; }
         const lv = mem.get(k); if (JSON.stringify(lv) === JSON.stringify(rv)) continue;
         const nv = mv(lv, rv, 0); if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; }
@@ -335,8 +341,8 @@ const css = `
 #kwDlg .btn{flex:1 1 auto}
 #kwDlg a{color:var(--accent,#0d5c6e)}
 #kwDlg details summary{cursor:pointer;font-size:.86rem;color:var(--muted,#5b6873)}
-#kwBar{position:fixed;z-index:70;left:8px;right:8px;bottom:calc(var(--tabh,58px) + env(safe-area-inset-bottom,0px) + 12px);background:var(--ink,#14212b);color:var(--bg,#fff);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:.9rem;box-shadow:0 8px 24px rgb(0 0 0/.3)}
-#kwBar button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:8px 14px;min-height:38px;background:var(--surface,#fff);color:var(--accent,#0d5c6e);cursor:pointer}
+#kwBar,#kwWarn{position:fixed;z-index:70;left:8px;right:8px;bottom:calc(var(--tabh,58px) + env(safe-area-inset-bottom,0px) + 12px);background:var(--ink,#14212b);color:var(--bg,#fff);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:.9rem;box-shadow:0 8px 24px rgb(0 0 0/.3)}
+#kwBar button,#kwWarn button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:8px 14px;min-height:38px;background:var(--surface,#fff);color:var(--accent,#0d5c6e);cursor:pointer}
 `;
 let dlg = null, pill = null, bar = null;
 const STATE_LABEL = { off: "Не подключён", ok: "Синхронизировано", pending: "Ждёт отправки", sync: "Синхронизация…", error: "Ошибка Диска", offline: "Нет сети", login: "Нужен вход", conflict: "Конфликт" };
@@ -345,7 +351,7 @@ function mountUI() {
   document.head.append(el("style", null, css));
   pill = el("button", { id: "kwPill", type: "button", "aria-label": "Подключения", onclick: () => openConn() }, el("i"), el("span"));
   document.body.append(pill);
-  Sync.onState = () => { updatePill(); if (dlg?.open && dlgMode === "conn") renderConn(); renderBar(); };
+  Sync.onState = () => { updatePill(); if (dlg?.open && dlgMode === "conn") renderConn(); renderBar(); renderWarn(); };
   updatePill();
 }
 function updatePill() {
@@ -358,6 +364,16 @@ function renderBar() {
     if (!bar) { bar = el("div", { id: "kwBar" }); document.body.append(bar); }
     bar.replaceChildren(el("span", null, Sync.conflict.kind === "newer" ? "На Диске есть более новые данные." : "Данные изменены на двух устройствах."), el("button", { type: "button", onclick: () => openConn() }, "Решить"));
   } else if (bar) { bar.remove(); bar = null; }
+}
+let warn = null;
+/* П13 (A0.2): данные только на телефоне, Диск не подключён — тихая плашка (скрывается на 7 дней кнопкой «Позже») */
+function renderWarn() {
+  const show = !!document.body && !Sync.consented() && !gateMode && docCount() > 0 && !(+ls.get(lk("kw_nodrv_until")) > Date.now());
+  if (!show) { if (warn) { warn.remove(); warn = null; } return; }
+  if (warn) return;
+  warn = el("div", { id: "kwWarn" }, el("span", null, persisted ? "Данные только на этом телефоне. Подключите Диск: копия спасёт при потере или замене телефона." : "Данные только на этом телефоне, браузер может стереть их при нехватке памяти. Подключите Диск."),
+    el("span", { style: "display:flex;gap:6px" }, el("button", { type: "button", onclick: () => openConn() }, "Подключить"), el("button", { type: "button", onclick: () => { ls.set(lk("kw_nodrv_until"), String(Date.now() + 7 * 864e5)); renderWarn(); } }, "Позже")));
+  document.body.append(warn);
 }
 const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 function stepBox(n, title, done, tag, body) {
@@ -428,7 +444,7 @@ async function googleLogin() {
     Sync.set("sync", "Ищу копию на Диске…");
     const files = await Sync.remote();
     let data = null; for (const f of files) { try { data = await Sync.load(f); break; } catch (e) { } }
-    const localEmpty = mem.size === 0;
+    const localEmpty = docCount() === 0;
     if (data && localEmpty) { await Sync.replaceLocal(data); location.reload(); return; }
     if (data && !localEmpty) { Sync.conflict = { data, kind: "both" }; Sync.set("conflict", "На Диске уже есть копия"); }
     else { await kvSet("dirty", true); await Sync.run(); }
@@ -486,7 +502,7 @@ function renderUsers() {
 document.addEventListener("click", ev => { if (ev.target.closest("#kwUser")) openUsers(); });
 function finishGate() { gateMode = false; kvSet("setupDone", true); dlg.close(); gateRes?.(); gateRes = null; }
 function gate() {
-  if (kv.setupDone || mem.size) return Promise.resolve();
+  if (kv.setupDone || docCount()) return Promise.resolve();
   return new Promise(res => { gateRes = res; gateMode = true; const go = () => { mountUI(); openConn(); }; if (document.body) go(); else addEventListener("DOMContentLoaded", go); });
 }
 
@@ -495,11 +511,12 @@ const readyP = (async () => {
   idb.db = await idbOpen(); await idbLoadAll();
   if (!kv.device) await kvSet("device", Math.random().toString(36).slice(2, 10));
   if (kv.consented === undefined && ls.get("consented") === "1" && Auth.cid()) await kvSet("consented", true);   // перенос из тест-страницы того же адреса
-  try { navigator.storage?.persist?.(); } catch (e) { }
+  (async () => { try { let p = await navigator.storage?.persisted?.(); if (!p) p = await navigator.storage?.persist?.(); persisted = !!p; } catch (e) { persisted = false; } plog("storage", persisted ? "закреплено" : "не закреплено"); try { Sync.onState?.(); } catch (e) { } })();
   Sync.set(Sync.consented() ? (kv.dirty ? "pending" : "ok") : "off", "");
 })();
 async function afterAppStart() {
   mountUI(); plog("platform", BUILD + " · google " + (Sync.consented() ? "вкл" : "выкл") + " · ключ " + (AI.key() ? "есть" : "нет"));
+  setTimeout(renderWarn, 3000);
   if (!Sync.consented()) return;
   setTimeout(() => Sync.check(true), 2500);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { if (Date.now() - Sync.lastCheck > 60000) Sync.check(false); } else if (kv.dirty) Sync.run().catch(() => { }); });
