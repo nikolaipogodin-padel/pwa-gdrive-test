@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П12.12 · 06.11.2026";
+const BUILD = "П12.13 · 06.11.2026";
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
 const plog = (k, d) => { try { if (typeof window.logEv === "function") { while (_pre.length) window.logEv(..._pre.shift()); window.logEv(k, d); } else _pre.push([k, d]); } catch (e) { } };
@@ -172,7 +172,7 @@ const Sync = {
             if (auto && performance.now() < 30000 || !auto) { await this.replaceLocal(data); location.reload(); return; }
             this.conflict = { data, kind: "newer" }; this.set("conflict", "На Диске новее"); return;
           }
-          this.conflict = { data, kind: "both" }; this.set("conflict", "Изменения на двух устройствах"); return;
+          this.busy = false; await this.merge(data); return;
         }
       }
       this.busy = false;
@@ -195,7 +195,7 @@ const Sync = {
       const files = await this.remote(), R = files[0] ? +files[0].appProperties?.rev || 0 : 0;
       if (R > (+kv.baseRev || 0) && !force) {
         let data = null; for (const f of files) { try { data = await this.load(f); break; } catch (e) { } }
-        if (data) { this.conflict = { data, kind: "both" }; this.set("conflict", "Изменения на двух устройствах"); return; }
+        if (data) { this.busy = false; await this.merge(data); return; }
       }
       const rev = Math.max(R, +kv.baseRev || 0) + 1, bytes = await gzip(this.snapshot(rev));
       const slot = SLOTS.map(n => files.find(f => f.name === n) || { name: n, rev: -1 }).sort((a, b) => (+a.appProperties?.rev || a.rev || 0) - (+b.appProperties?.rev || b.rev || 0))[0];
@@ -203,6 +203,35 @@ const Sync = {
       await kvSet("baseRev", rev); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
       this.set("ok", "Синхронизировано");
     } catch (e) { this.fail(e); } finally { this.busy = false; }
+  },
+  /* П12.12: расхождение правок — без вопросов: документы сливаются (по ключам, свои правки в приоритете), результат уходит на Диск; старые копии остаются в слотах */
+  async merge(data) {
+    try {
+      this.busy = true; this.set("sync", "Объединяю с Диском…");
+      const isO = v => v && typeof v === "object" && !Array.isArray(v);
+      const mv = (l, r, d) => {
+        if (d > 8 || l === undefined) return l === undefined ? r : l;
+        if (typeof l === "string" && typeof r === "string" && l !== r) { try { const a = JSON.parse(l), b = JSON.parse(r); if (a && b && typeof a === "object" && typeof b === "object") return JSON.stringify(mv(a, b, d + 1)); } catch (e) { } return l; }
+        if (isO(l) && isO(r)) { const o = { ...r }; for (const k of Object.keys(l)) o[k] = k in r ? mv(l[k], r[k], d + 1) : l[k]; return o; }
+        if (Array.isArray(l) && Array.isArray(r)) {
+          const idOf = x => isO(x) && x.id != null ? "i" + x.id : null;
+          if (l.some(idOf) || r.some(idOf)) { const seen = new Map(l.map(x => [idOf(x), x])); const out = l.slice(); for (const x of r) { const k = idOf(x); if (k == null ? !l.some(y => JSON.stringify(y) === JSON.stringify(x)) : !seen.has(k)) out.push(x); } return out; }
+          const out = l.slice(); for (const x of r) if (!l.some(y => JSON.stringify(y) === JSON.stringify(x))) out.push(x); return out;
+        }
+        return l;
+      };
+      const own = data.device === kv.device, out = new Map(mem); let changed = false;
+      if (!own) for (const [k, rv] of Object.entries(data.docs)) {
+        if (!mem.has(k)) { out.set(k, rv); changed = true; continue; }
+        const lv = mem.get(k); if (JSON.stringify(lv) === JSON.stringify(rv)) continue;
+        const nv = mv(lv, rv, 0); if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; }
+      }
+      plog("sync", "слияние: Диск rev " + data.rev + (own ? " (это же устройство)" : " (другое устройство)") + (changed ? " · добавлено с Диска" : " · без добавлений"));
+      if (changed) { await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of out) st.put(v, k); }); mem.clear(); for (const [k, v] of out) mem.set(k, v); }
+      await kvSet("baseRev", +data.rev || 0); await kvSet("dirty", true);
+      this.busy = false; await this.run(true);
+      if (changed && this.state === "ok") { bc?.postMessage({ t: "reload", from: TAB }); location.reload(); }
+    } catch (e) { this.busy = false; plog("sync-err", "merge " + String(e?.message || e).slice(0, 100)); this.conflict = { data, kind: "both" }; this.set("conflict", "Изменения на двух устройствах"); }
   },
   async resolve(useRemote) {
     const c = this.conflict; if (!c) return; this.conflict = null;
