@@ -1233,16 +1233,13 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 
 #p-set{display:flex;flex-direction:column;gap:10px}
 .sa,.sa-conn{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow)}
-.sa>summary,.sa-conn{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;min-height:56px;cursor:pointer;font:inherit;color:inherit;border:0;width:100%;text-align:left;box-sizing:border-box}
+.sa>summary,.sa-conn{list-style:none;display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:14px 16px;min-height:56px;cursor:pointer;font:inherit;color:inherit;border:0;width:100%;text-align:left;box-sizing:border-box}
 .sa>summary::-webkit-details-marker{display:none}
 .sa-t{font-size:var(--fs-m);font-weight:600;flex:none}
 .sa-v{font-size:var(--fs-s);color:var(--muted);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto}
-.sa>summary::after,.sa-conn::after{content:"›";color:var(--muted);font-size:22px;line-height:1;flex:none;transition:transform .15s}
-.sa[open]>summary::after{transform:rotate(90deg)}
-.sa-conn{background:var(--accent);color:var(--accent-ink,#fff)}
-.sa-conn .sa-v,.sa-conn::after{color:inherit;opacity:.85}
-.sa-conn.sa-plain{background:var(--surface);color:inherit}
-.sa-conn.sa-plain .sa-v,.sa-conn.sa-plain::after{color:var(--muted);opacity:1}
+.sa>summary::before{content:"▸";color:var(--muted);width:1em;flex:none}
+.sa[open]>summary::before{content:"▾"}
+.sa-conn{padding-left:calc(16px + 1em + 12px)}
 .sa-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
 .sa-h{margin:4px 0 0;font-size:var(--fs-s);font-weight:600;color:var(--muted)}
 #p-set .ops{box-shadow:none;border:1px solid var(--line)}
@@ -1253,6 +1250,9 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 .kwhist{display:flex;flex-direction:column;gap:8px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;margin:8px 0;font-size:var(--fs-s)}
 .kwhist[hidden]{display:none}
 .kwhist .btn{align-self:flex-start}
+
+#alerts .al{flex-wrap:nowrap;padding:6px 10px 6px 12px;gap:8px;font-size:var(--fs-s);line-height:1.25}
+#alerts .al .go{flex:none;min-height:30px;padding:4px 12px}
 </style>
 
 <div class="wrap">
@@ -1322,6 +1322,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   </div>
 
   <section id="p-home" role="tabpanel" aria-labelledby="t-home">
+    <div class="kwhist" id="kwIncChk" hidden><span id="kwIncT"></span><div class="row"><button class="btn primary" type="button" id="kwIncGo">Учесть как доход</button><button class="btn" type="button" id="kwIncNo">Это не доход</button></div></div>
     <section class="card" id="startCard" hidden>
       <h3>Первая выписка</h3>
       <div><button class="btn primary" type="button" data-go="in">Загрузить выписку</button></div>
@@ -5509,6 +5510,9 @@ function kwNice(info, pt) {
     return m[1] === "6011" ? "Банкомат " + s : s;
   }
   if (/^Value Date:/i.test(t)) { const p = String(pt || ""); return /interest/i.test(p) ? "Проценты банка" : /tax/i.test(p) ? "Налог на проценты" : t; }
+  // переводы Citadele: «назначение ИМЯ ЗАГЛАВНЫМИ  рег.номер/личный код  BIC  IBAN» — отправитель или получатель
+  const pm = /^(.*?)\s+(?:\d{11}|\d{6}-\d{5})\s+[A-Z0-9]{8,11}\s+[A-Z]{2}\d{2}[A-Z0-9]{8,}/.exec(t);
+  if (pm) { const tk = pm[1].split(" "), out = []; for (let i = tk.length - 1; i >= 0 && out.length < 5; i--) { if (/^[A-ZĀČĒĢĪĶĻŅŠŪŽ][A-ZĀČĒĢĪĶĻŅŠŪŽ.'&-]*$/.test(tk[i])) out.unshift(tk[i]); else break; } if (out.join("").length >= 4) return out.join(" "); }
   return t;
 }
 const cpText = o => (o.cp && o.cp !== "—") ? o.cp : kwNice(o.info || "", o.pt);
@@ -6311,8 +6315,8 @@ RENDER.alerts = function () {
   // дата выписки и пропуски — после задач (плашка одна: сначала то, что нужно сделать)
   const asof = st?.as_of;
   // на «Внести» карточка выписки и так перед глазами — плашка с «Загрузить» там не нужна (П7.9); давняя выписка — с годом и зачем свежая
-  if (asof && S.tab !== "in") { const lag = dayDiff(asof, todayISO()); if (lag > 45) add("warn", `Последняя выписка — по ${fmtFull(asof)}. Для текущего месяца нужна свежая.`, ["in", "Загрузить"]); else if (lag >= 3) add("neutral", `Данные банка по ${dGen(asof)}`, ["in", "Загрузить"]); }
-  if (S.tab !== "in") for (const g of statementGaps().slice(0, 3)) add("warn", `Нет выписки ${esc(acctLabel(g.acct))} за ${fmtFull(g.from)} – ${fmtFull(g.to)}.`, ["in", "Загрузить"]);
+  if (asof && S.tab === "ops") { const lag = dayDiff(asof, todayISO()); if (lag > 45) add("warn", `Выписка по ${fmtFull(asof)} устарела — нужна свежая.`, ["in", "Загрузить"]); else if (lag >= 3) add("neutral", `Данные банка по ${dGen(asof)}`, ["in", "Загрузить"]); }
+  if (S.tab === "ops") for (const g of statementGaps().slice(0, 3)) add("warn", `Нет выписки ${esc(acctLabel(g.acct))} за ${fmtFull(g.from)} – ${fmtFull(g.to)}.`, ["in", "Загрузить"]);
   // П10 (7.3): месяцы закрываются сами (autoClose); на экране — не больше одной плашки, самая важная
   $("alerts").innerHTML = items.slice(0, 1).join("");
 };
@@ -11097,6 +11101,16 @@ function u(){try{const h=histLeft(),b=g("kwHistQ");if(!b)return;b.hidden=!h.leng
 const t="Ранняя история без категории: "+pl(h.length,"операция","операции","операций")+" ("+(ms.length===1?mLabel(ms[0]):mLabel(ms[0])+" – "+mLabel(ms[ms.length-1]))+"). Сейчас разбираются только последние месяцы.";
 if(g("kwHistT").textContent!==t)g("kwHistT").textContent=t}}catch(e){}}
 setInterval(u,1500);document.addEventListener("click",()=>setTimeout(u,300));})();
+
+(()=>{const g=id=>document.getElementById(id);let cur=null;
+const dis=()=>{try{return JSON.parse(localStorage.getItem("kwIncNo")||"[]")}catch(e){return[]}};
+function u(){try{const b=g("kwIncChk");if(!b)return;let x=null;
+if(!onbStep()&&profile()&&profile().income&&!S.homeF){const d=dis();x=incomeCandidates().find(c=>!c.income&&c.months.size>=3&&c.sum>=500&&!d.includes(c.name))||null}
+cur=x;b.hidden=!x;if(x){const t="Не учтено как доход: "+x.name+" — "+pl(x.n,"поступление","поступления","поступлений")+" за "+pl(x.months.size,"месяц","месяца","месяцев")+", "+Math.round(x.sum).toLocaleString("ru-RU")+" €. Без него доход занижен, а расходы выглядят больше дохода.";if(g("kwIncT").textContent!==t)g("kwIncT").textContent=t}}catch(e){}}
+g("kwIncGo").addEventListener("click",async()=>{if(!cur)return;const n=cur.name,m=profile().income.markers||[];await setIncome([...m,n],true);logEv("income","добавлен признак: "+n);u()});
+g("kwIncNo").addEventListener("click",()=>{if(!cur)return;try{localStorage.setItem("kwIncNo",JSON.stringify([...dis(),cur.name]))}catch(e){}logEv("income","не доход: "+cur.name);u()});
+function ub(){try{const b=g("undoBar");if(!b)return;const on=S.tab==="ops"||S.tab==="q";if(b.dataset.kw!==(on?"1":"0")){b.dataset.kw=on?"1":"0";b.style.display=on?"":"none"}}catch(e){}}
+setInterval(()=>{u();ub()},1000);document.addEventListener("click",()=>setTimeout(()=>{u();ub()},300));})();
 /* зелёные подтверждения («Сохранено…», «Добавлено…») гаснут сами через 6 с */
 (()=>{const T=new WeakMap();new MutationObserver(ms=>{for(const m of ms){const e=m.target.nodeType===3?m.target.parentElement:m.target;const n=e&&e.closest&&e.closest(".okmsg");if(!n||!n.textContent)continue;clearTimeout(T.get(n));T.set(n,setTimeout(()=>{if(n.classList.contains("okmsg")){n.textContent="";n.className="small muted"}},6000))}}).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["class"]})})();
 if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
