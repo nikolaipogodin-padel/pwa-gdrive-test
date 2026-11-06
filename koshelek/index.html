@@ -1249,6 +1249,11 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 #p-set #sAcc{border:0;border-radius:0;background:none}
 #sAcc .acc-row:last-child{border-bottom:0}
 #p-set .inline .btn{flex:none}
+
+#hHist:not([hidden]){display:block !important}
+.kwhist{display:flex;flex-direction:column;gap:8px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;margin:8px 0;font-size:var(--fs-s)}
+.kwhist[hidden]{display:none}
+.kwhist .btn{align-self:flex-start}
 </style>
 
 <div class="wrap">
@@ -1553,6 +1558,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div class="qtop">
       <div class="qtitle"><h2 id="qSheetT">Разбор операций</h2><button type="button" class="linkbtn" id="qClose">Все операции</button></div>
       <p class="qper" id="qPer"></p>
+      <div class="kwhist" id="kwHistQ" hidden><span id="kwHistT"></span><button class="btn primary" type="button" id="kwHistGo">Разобрать более раннюю историю</button></div>
     </div>
     <div class="qhead" id="qHead" hidden>
       <div class="qtabs" role="tablist" aria-label="Разбор операций" id="qTabs"></div>
@@ -11059,6 +11065,13 @@ const nm=(g("sName")||{}).value||"";set("saProfV",(nm||"без имени")+" ·
 set("saAccV",pl(document.querySelectorAll("#sAcc .acc-row").length,"счёт","счёта","счетов"));
 const ai=g("sAI");set("saAIV",(ai&&ai.selectedOptions[0]?ai.selectedOptions[0].text.split(" — ")[0]:"")+(g("sAuto")&&g("sAuto").checked?" · без подтверждения":""));}catch(e){}}
 setInterval(upd,1500);document.addEventListener("click",()=>setTimeout(upd,200));document.addEventListener("input",()=>setTimeout(upd,200));addEventListener("koshelek-ai",()=>setTimeout(upd,200));})();
+
+(()=>{const g=id=>document.getElementById(id);
+document.addEventListener("click",ev=>{if(ev.target.closest("#kwHistGo"))g("hHistGo").click()});
+function u(){try{const h=histLeft(),b=g("kwHistQ");if(!b)return;b.hidden=!h.length;if(h.length){const ms=[...new Set(h.map(o=>String(o.d).slice(0,7)))].sort();
+const t="Ранняя история без категории: "+pl(h.length,"операция","операции","операций")+" ("+(ms.length===1?mLabel(ms[0]):mLabel(ms[0])+" – "+mLabel(ms[ms.length-1]))+"). Сейчас разбираются только последние месяцы.";
+if(g("kwHistT").textContent!==t)g("kwHistT").textContent=t}}catch(e){}}
+setInterval(u,1500);document.addEventListener("click",()=>setTimeout(u,300));})();
 /* зелёные подтверждения («Сохранено…», «Добавлено…») гаснут сами через 6 с */
 (()=>{const T=new WeakMap();new MutationObserver(ms=>{for(const m of ms){const e=m.target.nodeType===3?m.target.parentElement:m.target;const n=e&&e.closest&&e.closest(".okmsg");if(!n||!n.textContent)continue;clearTimeout(T.get(n));T.set(n,setTimeout(()=>{if(n.classList.contains("okmsg")){n.textContent="";n.className="small muted"}},6000))}}).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["class"]})})();
 if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
