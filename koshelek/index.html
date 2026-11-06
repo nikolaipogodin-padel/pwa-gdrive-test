@@ -1250,7 +1250,6 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 #sAcc .acc-row:last-child{border-bottom:0}
 #p-set .inline .btn{flex:none}
 
-#hHist:not([hidden]){display:block !important}
 .kwhist{display:flex;flex-direction:column;gap:8px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px;margin:8px 0;font-size:var(--fs-s)}
 .kwhist[hidden]{display:none}
 .kwhist .btn{align-self:flex-start}
@@ -1523,6 +1522,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   </section>
 
   <section id="p-ops" role="tabpanel" aria-labelledby="t-ops" hidden>
+    <div class="kwhist" id="kwHistQ" hidden><span id="kwHistT"></span><button class="btn primary" type="button" id="kwHistGo">Разобрать более раннюю историю</button></div>
     <section class="card ask" id="askCard" hidden aria-label="Вопрос к своим данным">
       <form class="ask-row" id="askForm"><input id="askQ" type="text" enterkeyhint="send" maxlength="300" placeholder="Спросить про свои траты: сколько на падел за квартал?" aria-label="Вопрос к своим данным"><button class="btn keep ask-clr" type="button" id="askClr" hidden aria-label="Сбросить вопрос" title="Сбросить">✕</button><button class="btn primary" type="submit" id="askGo">Спросить</button></form>
       <div id="askOut" hidden>
@@ -1558,7 +1558,6 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div class="qtop">
       <div class="qtitle"><h2 id="qSheetT">Разбор операций</h2><button type="button" class="linkbtn" id="qClose">Все операции</button></div>
       <p class="qper" id="qPer"></p>
-      <div class="kwhist" id="kwHistQ" hidden><span id="kwHistT"></span><button class="btn primary" type="button" id="kwHistGo">Разобрать более раннюю историю</button></div>
     </div>
     <div class="qhead" id="qHead" hidden>
       <div class="qtabs" role="tablist" aria-label="Разбор операций" id="qTabs"></div>
