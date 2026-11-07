@@ -990,7 +990,7 @@ body.is-onbai #p-q, body.is-onbai #qFoot, body.is-onbai #undoBar { display: none
 .inc-pur { margin: 6px 0 0 39px; } .inc-pur > summary { color: var(--accent); font-size: var(--fs-m); font-weight: 700; min-height: 40px; }
 .bank-list { border-top: 1px solid #d4dee7; margin: 4px 0 0 -39px; padding: 7px 0 2px 39px; }
 .bank-item { display: grid; grid-template-columns: minmax(0, 1fr) max-content; column-gap: 8px; align-items: start; padding: 7px 0; font-size: 12px; line-height: 1.4; color: #5d6c82; }
-.bank-left { min-width: 0; overflow-wrap: anywhere; } .kw-raw { display: block; margin-top: 2px; } .kw-raw summary { display: inline; cursor: pointer; font-size: 11px; color: #8696a8; list-style: none; } .kw-raw summary::-webkit-details-marker { display: none; } .kw-raw div { font-size: 11px; color: #8696a8; overflow-wrap: anywhere; padding: 2px 0; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
+.bank-left { min-width: 0; overflow-wrap: anywhere; } .bal-sec > summary span::before { color: var(--muted) !important; font-size: inherit !important; width: 1em !important; } details.more > summary::-webkit-details-marker, .sub-tree summary::-webkit-details-marker { display: none; } details.more > summary::before, .sub-tree details > summary > :first-child::before { content: "▸"; color: var(--muted); display: inline-block; width: 1em; flex: none; } details.more[open] > summary::before, .sub-tree details[open] > summary > :first-child::before { content: "▾"; } details.more > summary { list-style: none; } .kw-slot-off { display: none !important; } .kw-raw { display: block; margin-top: 2px; } .kw-raw summary { display: inline; cursor: pointer; font-size: 11px; color: #8696a8; list-style: none; } .kw-raw summary::-webkit-details-marker { display: none; } .kw-raw div { font-size: 11px; color: #8696a8; overflow-wrap: anywhere; padding: 2px 0; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
 .bank-amt { text-align: right; white-space: nowrap; color: #435c71; font-weight: 500; }
 #incNone { margin: 14px 1px 0; padding: 9px 2px; min-height: 44px; font-size: var(--fs-m); font-weight: 700; text-decoration: none; }
 .incgo { padding-top: 17px; background: linear-gradient(transparent, var(--surface) 30%); } .incgo .btn { min-height: 61px; font-size: var(--fs-l); }
@@ -1604,7 +1604,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
           <div id="sHintBox"></div>
           <textarea id="sNotes" rows="2" maxlength="300" aria-label="Новая подсказка" placeholder="Например: JĀNIS BĒRZIŅŠ — партнёр по теннису, его переводы — возврат по «Спорт»."></textarea></div>
       <div class="inline"><button class="btn" type="button" id="sNotesSave">Добавить подсказку</button><span class="note" id="sNotesMsg" aria-live="polite"></span></div>
-      <div class="inline"><button class="btn" type="button" id="sRedo">Перепроверить ответы ИИ</button><button type="button" class="ib" id="sRedoTip" data-tip="ИИ ещё раз посмотрит операции, которые разложил раньше прежней подсказкой. Ваши правки и ваш выбор не меняются. Неясное вернётся в «Вопросы»." aria-label="Подсказка" aria-expanded="false">i</button><span class="note" id="sRedoMsg" aria-live="polite"></span></div>
+      <div class="inline"><button class="btn" type="button" id="sRedo">Перепроверить ответы ИИ</button><button type="button" class="ib" id="sRedoTip" data-tip="ИИ ещё раз посмотрит операции, которые разложил раньше прежней подсказкой. Ваши правки и ваш выбор не меняются. Неясное вернётся в «Разбор»." aria-label="Подсказка" aria-expanded="false">i</button><span class="note" id="sRedoMsg" aria-live="polite"></span></div>
     </div></details>
     <details class="sa" id="saData"><summary><span class="sa-t">Данные</span></summary><div class="sa-b">
       <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><span class="note" id="sExportMsg" aria-live="polite"></span></div>
@@ -3032,6 +3032,7 @@ function kwWb(p) {
   if (/^\(\?[<!=i]/.test(p)) return p;
   return kwSplitTop(p).map((a) => (/^[A-Za-z0-9Ā-ſА-яЁё]/.test(a) ? '(?<![A-Za-zĀ-ſА-яЁё])' + a : a)).join('|');
 }
+const KW_VAGUE = /^(?:main|shop|store|market|markets|center|centre|centrs|city|point|express|online|group|trade|food|home|plus|super|mini|maxi|veikals|veikali|bar|cafe|cafes|kafe|bistro|restoran\w*|aptieka|servisa?|serviss|sia|ltd)$/i;
 function compiledRules(rulesDoc) {
   const NO = typeof globalThis.KW_NOINC === 'function' ? globalThis.KW_NOINC() : [];
   return rulesDoc.rules.map((r) => {
@@ -3806,7 +3807,8 @@ function applyEdits(book, docs) {
     if (!(truthy(pget(e, 'make_rule')) && marker)) continue;
     const pat = pyEscape(marker);
     const text = op ? `${op.cp} | ${op.info}` : null;
-    if ([...marker].length < 3) warns.push(`правка ${tx}: маркер «${marker}» короче 3 символов — правило не создано`);
+    if (KW_VAGUE.test(marker)) warns.push(`правка ${tx}: маркер «${marker}» слишком общий — правило не создано`);
+    else if ([...marker].length < 3) warns.push(`правка ${tx}: маркер «${marker}» короче 3 символов — правило не создано`);
     else if (text !== null && !pySearch(pat, text, true)) warns.push(`правка ${tx}: маркер «${marker}» не найден в операции — правило не создано`);
     else if (rulesDoc.rules.some((r) => [pat.toLowerCase(), marker.toLowerCase()].includes(r.pattern.toLowerCase()))) warns.push(`правка ${tx}: правило с маркером «${marker}» уже есть`);
     else {
@@ -4458,7 +4460,7 @@ return {
   // прогноз и документы
   buildForecast, buildForecastFor, exportDocs, opToDoc, docToOp,
   // совместимость с Python (для тестов)
-  _py: { kwWb, pyRound, pyFixed, pyRepr, pySum, pyStrip, pyEscape, pyFloatStr, cmpStr, translatePyRegex, pyRegex, pySearch, pyCsv, pyLines,
+  _py: { KW_VAGUE, kwWb, pyRound, pyFixed, pyRepr, pySum, pyStrip, pyEscape, pyFloatStr, cmpStr, translatePyRegex, pyRegex, pySearch, pyCsv, pyLines,
          sha1Hex, strptimeDate, migrateJournal, nowStr, mshift, monthEnd, validIso, cpSlice, CP1257, decodeCp1257 },
   // внутренние части разбора (для wallet-learn.js)
   _fmt: { rowsOf, nfc, moneyParser, labelList, maskText, headerRowFor, signatureOf, rowText, lineAmount, csvCell, isoDays, isoOf,
@@ -6355,7 +6357,7 @@ RENDER.alerts = function () {
   // закрытый месяц с вопросами принять нельзя — сначала ответы (иначе «Принять» молча не срабатывает)
   const ct = S.book?.state?.closed_through || "", qClosed = dm.length ? allOps().filter(o => o.t === "❓" && !isManual(o) && String(o.d).slice(0, 7) <= ct).length : 0;
   const mtxt = dm.length > 1 ? `Изменились закрытые месяцы: ${mLabel(dm[0])} – ${mLabel(dm[dm.length - 1])} (${dm.length})` : `Изменился закрытый месяц ${mLabel(dm[0] || "")}`;
-  if (dm.length && qClosed) add("bad", `${mtxt}. Сначала ${pl(qClosed, "вопрос", "вопроса", "вопросов")} в них (кнопка «Вопросы» вверху) — потом «Принять».`);
+  if (dm.length && qClosed) add("bad", `${mtxt}. Сначала ${pl(qClosed, "вопрос", "вопроса", "вопросов")} в них (вкладка «Разбор» вверху) — потом «Принять».`);
   else if (dm.length) add("bad", mtxt + ".", ["resealall", dm.length > 1 ? "Принять все" : "Принять"]);
   if (st?.warnings?.length) add("warn", `Замечаний пересчёта: ${st.warnings.length}.`, ["q", "Открыть"]);
   if (cashAsk() && !cashAskSkipped()) {
@@ -10545,7 +10547,7 @@ function aiDraw() {
   const cs = S.book?.rules?.candidates || [];
   $("candAll").textContent = `Принять все (${cs.length})`;
   $("sCands").innerHTML = cs.map((k, i) => `<div class="cand"><div class="cand-t"><span class="cand-p">${esc(k.marker)}</span><span class="small muted num">${pl((k.txs || []).length, "операция", "операции", "операций")}</span></div>
-    <div class="cand-c">→ ${esc(k.group)} · ${esc(k.sub)}</div><div class="cand-a"><button type="button" class="mini" data-candok="${i}">Принять</button><button type="button" class="mini" data-candno="${i}" title="Категории операций остаются, правило не создаётся и больше не предлагается">Не создавать правило</button><button type="button" class="mini" data-candbad="${i}" title="Операции вернутся во «Вопросы»">Категория неверна</button></div></div>`).join("");
+    <div class="cand-c">→ ${esc(k.group)} · ${esc(k.sub)}</div><div class="cand-a"><button type="button" class="mini" data-candok="${i}">Принять</button><button type="button" class="mini" data-candno="${i}" title="Категории операций остаются, правило не создаётся и больше не предлагается">Не создавать правило</button><button type="button" class="mini" data-candbad="${i}" title="Операции вернутся в «Разбор»">Категория неверна</button></div></div>`).join("");
 }
 document.addEventListener("click", async ev => {
   if (!ev.target.closest("#candAll")) return;
@@ -10561,7 +10563,7 @@ document.addEventListener("click", async ev => {
   const ok = ev.target.closest("[data-candok]"), no = ev.target.closest("[data-candno]"), bad = ev.target.closest("[data-candbad]"); if (!ok && !no && !bad) return;
   const b = ok || no || bad, i = +(ok ? b.dataset.candok : no ? b.dataset.candno : b.dataset.candbad);
   let back = 0;
-  const done = await act(ok ? "Принимаю правило…" : bad ? "Возвращаю во «Вопросы»…" : "Отказываюсь от правила…", () => {
+  const done = await act(ok ? "Принимаю правило…" : bad ? "Возвращаю в «Разбор»…" : "Отказываюсь от правила…", () => {
     const rd = clone(S.book.rules), k = (rd.candidates || [])[i]; if (!k) return false;
     if (ok) promoteCand(rd, k);
     else rd.rejected = (rd.rejected || []).concat([{ pattern: k.pattern, marker: k.marker, type: k.type, group: k.group, sub: k.sub, at: nowStr(), why: bad ? "категория неверна" : "без правила" }]);
@@ -10578,7 +10580,7 @@ document.addEventListener("click", async ev => {
     rd.candidates.splice(i, 1); rd.version = (rd.version || 0) + 1; S.book.rules = rd; reapply();
   });
   if (done && no) showNote(`Правило «${b.closest(".cand")?.querySelector(".cand-p")?.textContent || ""}» не создано и больше не будет предложено. Категории операций остались.`);
-  if (done && bad) showNote(`Во «Вопросы» вернулось ${pl(back, "операция", "операции", "операций")}. Правило больше не будет предложено.`);
+  if (done && bad) showNote(`В «Разбор» вернулось ${pl(back, "операция", "операции", "операций")}. Правило больше не будет предложено.`);
 });
 /* правило от ИИ: принятый кандидат («ИИ, подтверждено») или правило из ответа ИИ во «Вопросах» */
 function ruleFromAI(r) { if (r.edited) return false; if (/ИИ/.test(r.src || "")) return true; const m = /операция (\S+)/.exec(r.src || ""); return !!(m && /Claude/.test(S.edits[m[1]]?.via || "")); }
@@ -11280,6 +11282,39 @@ window.kwAutoStat = function () {
     } catch (e) { }
   }
   setInterval(step, 5000); setTimeout(step, 8000);
+})();
+</script>
+<script>
+/* П13.4 (C1): одно сообщение за раз. Приоритет: конфликт синхронизации → тревоги на странице → проверка дохода → «Данные только на телефоне» → «Разобрать более ранние» → «Пора загрузить выписку».
+   Остальные временно скрыты классом kw-slot-off (атрибут hidden не трогаем) и вернутся, когда верхнее исчезнет. */
+(function () {
+  const vis = e => { if (!e || e.hidden) return false; if (e.id === "alerts" && !e.children.length) return false; const was = e.classList.contains("kw-slot-off"); if (was) e.classList.remove("kw-slot-off"); const r = e.getClientRects().length > 0; if (was) e.classList.add("kw-slot-off"); return r; };
+  const ids = ["kwBar", "alerts", "kwIncChk", "kwWarn", "kwHistQ", "kwNext"];
+  function slot() {
+    try {
+      let top = null;
+      for (const id of ids) { const e = document.getElementById(id); if (!e) continue; const v = vis(e); if (v && !top) { top = id; e.classList.remove("kw-slot-off"); } else if (v) e.classList.add("kw-slot-off"); else e.classList.remove("kw-slot-off"); }
+      window.kwSlotTop = top;
+    } catch (e) { }
+  }
+  window.kwSlot = slot; setInterval(slot, 700); document.addEventListener("click", () => setTimeout(slot, 120));
+})();
+/* П13.4 (D2): если последняя операция старше 20 дней — на главной подсказка «Пора загрузить выписку». */
+(function () {
+  function step() {
+    try {
+      const home = document.getElementById("p-home"); if (!home || typeof allOps !== "function" || typeof S === "undefined" || !S.book) return;
+      let ex = document.getElementById("kwNext"); const ops = allOps(); let mx = "";
+      for (const o of ops) if (o.d > mx && o.src !== "Наличные" && o.src !== "Предварительно") mx = o.d;
+      const days = mx ? Math.floor((Date.now() - new Date(mx + "T12:00:00").getTime()) / 864e5) : 0;
+      if (!mx || days < 20) { if (ex) ex.remove(); return; }
+      const txt = "Последняя операция в выписке — " + mx.slice(8) + "." + mx.slice(5, 7) + " (" + days + " дн. назад). Пора загрузить свежую выписку.";
+      if (!ex) { ex = document.createElement("div"); ex.id = "kwNext"; ex.className = "kwhist"; ex.innerHTML = '<span></span><div class="row"><button class="btn primary" type="button" data-go="in">Загрузить выписку</button></div>'; const a = document.getElementById("alerts"); (a && a.parentNode ? a.parentNode : home).insertBefore(ex, a ? a.nextSibling : home.firstChild); }
+      const sp = ex.querySelector("span"); if (sp.textContent !== txt) sp.textContent = txt;
+      ex.hidden = false;
+    } catch (e) { }
+  }
+  window.kwNextStep = step; setInterval(step, 6000); setTimeout(step, 8500);
 })();
 </script>
 </body></html>

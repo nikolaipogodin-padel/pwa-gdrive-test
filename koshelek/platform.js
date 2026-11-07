@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П13.3 · 07.11.2026";
+const BUILD = "П13.4 · 07.11.2026";
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
@@ -225,15 +225,16 @@ const Sync = {
         }
         return l;
       };
-      const own = data.device === kv.device, out = new Map(mem); let changed = false;
+      const own = data.device === kv.device, out = new Map(mem); let changed = false, nCh = 0;
       if (!own) for (const [k, rv] of Object.entries(data.docs)) {
         if (isLog(k)) continue;
-        if (!mem.has(k)) { out.set(k, rv); changed = true; continue; }
+        if (!mem.has(k)) { out.set(k, rv); changed = true; nCh++; continue; }
         const lv = mem.get(k); if (JSON.stringify(lv) === JSON.stringify(rv)) continue;
-        const nv = mv(lv, rv, 0); if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; }
+        const nv = mv(lv, rv, 0); if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; nCh++; }
       }
       plog("sync", "слияние: Диск rev " + data.rev + (own ? " (это же устройство)" : " (другое устройство)") + (changed ? " · добавлено с Диска" : " · без добавлений"));
       if (changed) { await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of out) st.put(v, k); }); mem.clear(); for (const [k, v] of out) mem.set(k, v); }
+      if (!own) await kvSet("lastMerge", { at: Date.now(), dev: String(data.device || "").slice(-4), rev: +data.rev || 0, n: nCh });   // П13.4 (D4)
       await kvSet("baseRev", +data.rev || 0); await kvSet("dirty", true);
       this.busy = false; await this.run(true);
       if (changed && this.state === "ok") { bc?.postMessage({ t: "reload", from: TAB }); location.reload(); }
@@ -396,14 +397,20 @@ function renderConn() {
         el("button", { class: "btn", type: "button", onclick: async () => { if (Sync.state === "login") { try { await Auth.get("consent"); } catch (e) { } } kvSet("dirty", true); Sync.conflict ? null : Sync.run(); } }, "Синхронизировать сейчас"),
         el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("consented", false); Auth.token = null; Sync.set("off", ""); renderConn(); } }, "Отключить"))));
   }
+  if (g && kv.lastMerge) stGoogle.push(el("div", { class: "m", id: "kwMerge" }, "Последнее слияние: " + new Date(kv.lastMerge.at).toLocaleString("ru-RU") + " · с устройством …" + kv.lastMerge.dev + " · " + (kv.lastMerge.n ? "добавлено документов: " + kv.lastMerge.n : "без добавлений")));   // П13.4 (D4)
   if (gMsg) stGoogle.push(el("div", { class: "m bad" }, gMsg));
   if (Sync.conflict) stGoogle.push(el("div", { class: "st" }, el("div", { class: "m" }, "На Диске копия от " + new Date(Sync.conflict.data.savedAt || Date.now()).toLocaleString("ru-RU") + ". Выберите, какие данные оставить — вторые будут заменены."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с этого телефона"))));
   const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён на этом телефоне" : "Ключ Gemini (AIza…)", autocomplete: "off" });
   const stForm = [
     el("div", { class: "m" }, "ИИ раскладывает траты по категориям. Нужен личный бесплатный ключ Google AI Studio. Ключ хранится только на этом телефоне и никуда не синхронизируется."),
-    el("div", { class: "m" }, el("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "Открыть страницу ключа"), " → «Create API key» → скопировать и вставить сюда."),
+    el("ol", { class: "m", style: "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px" },
+      el("li", null, el("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "Откройте страницу ключа"), " и войдите тем же аккаунтом Google."),
+      el("li", null, "Нажмите «Create API key» и выберите проект (или создайте новый)."),
+      el("li", null, "Скопируйте ключ — он начинается с «AIza»."),
+      el("li", null, "Вернитесь сюда, нажмите «Вставить из буфера», затем кнопку проверки ниже.")),   // П13.4 (D1)
     key,
+    el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: async () => { try { const t = (await navigator.clipboard.readText()).trim(); if (t) { key.value = t; aiMsg = /^AIza[\w-]{20,}$/.test(t) ? "" : "В буфере не похоже на ключ: он начинается с «AIza» и без пробелов."; } else aiMsg = "Буфер пуст: скопируйте ключ на странице Google."; } catch (e) { aiMsg = "Браузер не дал доступ к буферу — вставьте ключ вручную в поле."; } const v = key.value; renderConn(); const k2 = document.getElementById("kwKey"); if (k2) k2.value = v; } }, "Вставить из буфера")),
     el("div", { class: "m" }, "Что уходит в Gemini: названия получателей и назначения платежей; для фото — само фото чека. Суммы и номера счетов при разборе операций не отправляются. Единственное исключение — кнопка «Неверно — спросить ИИ» при незнакомом формате выписки: уходят первые строки файла, номера счетов обезличены. Внимание: на бесплатном уровне Google может использовать отправленное для улучшения своих продуктов."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", disabled: aiBusy, onclick: async () => { const v = key.value.trim(); if (!v && !hasKey) { aiMsg = "Вставьте ключ."; renderConn(); return; } await aiCheck(v); } }, aiBusy ? "Проверяю…" : hasKey && !key.value ? "Проверить ключ" : "Сохранить и проверить"),
       hasKey ? el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("geminiKey", ""); ls.del(lk("gk")); aiMsg = "Ключ удалён."; window.dispatchEvent(new Event("koshelek-ai")); renderConn(); } }, "Удалить ключ") : null),
