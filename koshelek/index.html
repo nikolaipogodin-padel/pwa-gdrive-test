@@ -990,7 +990,7 @@ body.is-onbai #p-q, body.is-onbai #qFoot, body.is-onbai #undoBar { display: none
 .inc-pur { margin: 6px 0 0 39px; } .inc-pur > summary { color: var(--accent); font-size: var(--fs-m); font-weight: 700; min-height: 40px; }
 .bank-list { border-top: 1px solid #d4dee7; margin: 4px 0 0 -39px; padding: 7px 0 2px 39px; }
 .bank-item { display: grid; grid-template-columns: minmax(0, 1fr) max-content; column-gap: 8px; align-items: start; padding: 7px 0; font-size: 12px; line-height: 1.4; color: #5d6c82; }
-.bank-left { min-width: 0; overflow-wrap: anywhere; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
+.bank-left { min-width: 0; overflow-wrap: anywhere; } .kw-raw { display: block; margin-top: 2px; } .kw-raw summary { display: inline; cursor: pointer; font-size: 11px; color: #8696a8; list-style: none; } .kw-raw summary::-webkit-details-marker { display: none; } .kw-raw div { font-size: 11px; color: #8696a8; overflow-wrap: anywhere; padding: 2px 0; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
 .bank-amt { text-align: right; white-space: nowrap; color: #435c71; font-weight: 500; }
 #incNone { margin: 14px 1px 0; padding: 9px 2px; min-height: 44px; font-size: var(--fs-m); font-weight: 700; text-decoration: none; }
 .incgo { padding-top: 17px; background: linear-gradient(transparent, var(--surface) 30%); } .incgo .btn { min-height: 61px; font-size: var(--fs-l); }
@@ -5556,6 +5556,20 @@ function kwClean(cp) {
   return s.length >= 3 ? s : raw;
 }
 const cpShow = o => kwClean(cpText(o));
+/* П13.3 (C2) */
+const kwMask = s => String(s || "").replace(/\b\d{4,6}\s?\*{4,}\s?\d{2,4}\b/g, "****");
+function kwInfoShort(o, nm) {
+  let s = kwMask(o.info).replace(/\s+/g, " ").trim();
+  s = s.replace(/^PIRKUMS\b\s*/i, "").replace(/\*{4}/g, "").replace(/\(\s*\)/g, "").replace(/\b\d{2}\/\d{2}\/\d{4}\b/g, "").replace(/\bMCC-\d{4}\b/g, "").replace(/\bREF:\s*\d*/gi, "").replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/g, "");
+  const base = String(nm || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  if (base.length > 2) s = s.replace(new RegExp(base, "i"), "");
+  s = s.replace(/\\[^\s]*/g, " ").replace(/\b(?:LV-?\d{4}|LV)\b/g, "").replace(/[\s,;·|'"-]+/g, " ").trim();
+  return s.length >= 3 ? s.slice(0, 70) : "";
+}
+function kwOpLine(o) {
+  const nm = cpShow(o) || "—", sh = kwInfoShort(o, nm), raw = kwMask(o.info);
+  return esc(nm) + (sh ? " · " + esc(sh) : "") + (raw && raw !== nm && raw !== sh ? `<details class="kw-raw"><summary>Подробнее</summary><div>${esc(raw)}</div></details>` : "");
+}
 const isManual = o => o.src === "Наличные" || o.src === "Предварительно" || String(o.id).startsWith("CASH-") || String(o.id).startsWith("PND-");
 const pickErr = (map, e, dflt) => (map[e?.code] || dflt) + (e?.code ? ` [${e.code}]` : "");
 const nowStr = () => W._py.nowStr();
@@ -7862,7 +7876,7 @@ function qEditor(x) {
 function qOpsHtml(x) {
   const lim = (S.qOpsLim || {})[x.key] || 30, acct0 = S.book?.state?.account || "";
   const cat = o => o.t === "❓" ? "без категории" : catLabel({ type: o.t, group: o.g, sub: o.s }) || o.t;
-  return `<ul class="qops">${x.ops.slice(0, lim).map(o => `<li><div class="bank-item"><div class="bank-left"><span class="bank-date">${fmtFull(o.d)}</span> <span class="bank-desc">${esc(cpText(o) || "—")}${o.info ? " · " + esc(o.info) : ""}</span></div><b class="bank-amt num${o.a > 0 ? " in" : ""}">${o.a > 0 ? "+" : ""}${eur(o.a)} €</b></div>
+  return `<ul class="qops">${x.ops.slice(0, lim).map(o => `<li><div class="bank-item"><div class="bank-left"><span class="bank-date">${fmtFull(o.d)}</span> <span class="bank-desc">${kwOpLine(o)}</span></div><b class="bank-amt num${o.a > 0 ? " in" : ""}">${o.a > 0 ? "+" : ""}${eur(o.a)} €</b></div>
     <div class="qo-m small muted">${esc(o.src || "Банк")} ${esc(acctLabel(o.ac || acct0))} · ${esc(cat(o))}</div></li>`).join("")}</ul>`
     + (x.ops.length > lim ? `<button class="btn more-btn" type="button" data-qopsmore="${esc(x.key)}">Показать ещё ${Math.min(30, x.ops.length - lim)} из ${x.ops.length - lim}</button>` : "");
 }
