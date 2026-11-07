@@ -1235,6 +1235,8 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 #p-in .imp .drop { display: flex; align-items: center; gap: 10px; padding: 8px 10px; } #p-in .imp .drop .btn { min-height: 44px; font-size: var(--fs-m); padding: 8px 14px; flex: none; }
 #p-in .imp .drop > span { font-size: var(--fs-s); line-height: 1.3; }
 #p-in .in-row { gap: 8px; } #p-in .in-row .btn.primary { min-height: 44px; } #p-in .in-row .drop { padding: 4px 6px; } #inDropText { display: none; }
+#p-in .imp.card { padding: 12px 14px; } #p-in .imp .drop { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t b" "h b"; align-items: center; gap: 2px 12px; border: 0; padding: 0; background: none; }
+#p-in .imp .drop h2 { grid-area: t; margin: 0; } #p-in .imp .drop > span { grid-area: h; } #p-in .imp .drop .filebtn { grid-area: b; }
 .prelim-h>span:first-child{min-width:0;flex:1 1 auto}
 .pbar-in.ind{width:35%!important;animation:kwInd 1.3s ease-in-out infinite alternate}
 @keyframes kwInd{from{margin-left:0}to{margin-left:65%}}
@@ -1465,10 +1467,10 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 
   <section id="p-in" role="tabpanel" aria-labelledby="t-in" hidden>
     <section class="card imp" id="impCard" aria-labelledby="impT">
-      <h2 id="impT">Выписка банка</h2>
       <div class="drop" id="impDrop" tabindex="0">
-        <span id="impDropText">CSV или Excel из интернет-банка. Можно сразу несколько.</span>
-        <label class="btn primary filebtn">Загрузить выписку<input id="impFile" type="file" multiple class="vh"></label>
+        <h2 id="impT">Выписка банка</h2>
+        <span id="impDropText">CSV или Excel. Можно несколько.</span>
+        <label class="btn primary filebtn">Загрузить<input id="impFile" type="file" multiple class="vh"></label>
       </div>
       <div id="impBox" aria-live="polite"></div>
       <p class="small muted" id="impTotal" hidden></p>
@@ -7813,6 +7815,7 @@ const PROB_INSURANCE = [["Жильё и дом", "Страхование жил�
 const PROB_INCOME = [["Доход", "Зарплата"], ["Доход", "Выплаты и пособия"], ["Доход", "Возвраты и возврат долга"], ["Доход", "Прочие доходы"]];
 const PROB_PERSON = [["Семья и питомцы", "Помощь близким"], ["Семья и питомцы", "Карманные деньги"]];
 const ALL_G = "＋ Все группы…", ALL_S = "＋ Все подстатьи…";
+const RU = (a, b) => String(a).localeCompare(String(b), "ru");   // П13.9: меню по алфавиту
 function qProb(x, e) {
   const types = S.catalog?.types || {}, out = [], seen = new Set();
   const has = (t, g, u) => (types[t === "Возврат" ? "Расход" : t]?.[g] || []).includes(u);
@@ -7845,8 +7848,8 @@ function qProb(x, e) {
 function qEditor(x) {
   const e = S.qEdit[x.key] || choiceOf(x), k = esc(x.key), n = x.ops.length, dirIn = x.dir === "in";
   const types = Object.keys(S.catalog?.types || {}), gmap = qGm(e.type);
-  const gn = Object.keys(gmap).filter(g => g !== "❓"); if (e.gNew && e.group && !gn.includes(e.group)) gn.push(e.group);
-  const subs = e.gNew || (e.group === "Прочие расходы" && !e.dirty) ? [] : (gmap[e.group] || []).filter(v => v !== "❓"); if (e.sNew && e.sub && !subs.includes(e.sub)) subs.push(e.sub);
+  const gn = Object.keys(gmap).filter(g => g !== "❓"); if (e.gNew && e.group && !gn.includes(e.group)) gn.push(e.group); gn.sort(RU);
+  const subs = e.gNew || (e.group === "Прочие расходы" && !e.dirty) ? [] : (gmap[e.group] || []).filter(v => v !== "❓"); if (e.sNew && e.sub && !subs.includes(e.sub)) subs.push(e.sub); subs.sort(RU);
   const A = S.qAdd && S.qAdd.key === x.key ? S.qAdd : null;
   const opts = (arr, v, ph, add) => `<option value=""${v ? "" : " selected"}>${ph}</option>` + arr.map(a => `<option${a === v ? " selected" : ""}>${esc(a)}</option>`).join("") + `<option value="${NEW_OPT}" class="opt-new">${add}</option>`;
   const addBlk = kind => `<div class="qe-add" role="group" aria-label="${kind === "group" ? "Новая группа" : "Новая подстатья"}">
@@ -7866,10 +7869,12 @@ function qEditor(x) {
   const gnP = probOn ? [...new Set(prob.map(p => p.group))].filter(g => gn.includes(g)) : gn;
   if (probOn && e.group && !FB && !gnP.includes(e.group) && gn.includes(e.group)) gnP.push(e.group);
   if (probOn) { const cnt = {}; for (const o of allOps()) { if ((o.a > 0) !== dirIn || o.t === "❓" || !gn.includes(o.g)) continue; cnt[o.g] = (cnt[o.g] || 0) + 1; } for (const g of Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])) { if (gnP.length >= 5) break; if (!gnP.includes(g)) gnP.push(g); } }   // П12: вероятные + самые частые, остальное — «Все группы…»
+  gnP.sort(RU);
   const subP0 = probOn && e.group ? [...new Set(prob.filter(p => p.group === e.group).map(p => p.sub))].filter(v => subs.includes(v)) : [];
   const subOn = subP0.length > 0 && subP0.length < subs.length && !(S.qAllSubs && S.qAllSubs[x.key]);
   const subP = subOn ? subP0.slice() : subs;
   if (subOn && e.sub && !subP.includes(e.sub) && subs.includes(e.sub)) subP.push(e.sub);
+  subP.sort(RU);
   const optsG = (arr, v, ph, add, rest) => { const o = a => `<option${a === v && !FB ? " selected" : ""}>${esc(a)}</option>`; return `<option value=""${v && !FB ? "" : " selected"}>${ph}</option>` + arr.map(o).join("") + (rest && rest.length ? `<option value="${add === "Новая группа" ? ALL_G : ALL_S}" class="opt-new">${add === "Новая группа" ? ALL_G : ALL_S}</option>` : "") + `<option value="${NEW_OPT}" class="opt-new">${add}</option>`; };   // П11.6.6: основные сверху, остальные ниже в том же списке — список не закрывается
   return `<div class="qe">
     <div class="qe-f">
@@ -8003,7 +8008,7 @@ function qFootDraw(V) {
 const qFind = key => qGroups().find(x => x.key === key);
 function qEditOf(key) { const x = qFind(key); if (!x) return null; if (!S.qEdit[key]) S.qEdit[key] = Object.assign({}, choiceOf(x), { dirty: false }); return { x, e: S.qEdit[key] }; }
 /* правка не сворачивает карточку — фокус и прокрутка сохраняются */
-function redrawRow(key, focusSel) {
+function redrawRow(key, focusSel, open) {
   const el = [...document.querySelectorAll("#qList .qg")].find(d => d.dataset.qk === key), x = qFind(key);
   if (el && x) {
     const fa = document.activeElement, ff = fa && el.contains(fa) ? fa.dataset.f : null, wy = window.scrollY;
@@ -8012,6 +8017,7 @@ function redrawRow(key, focusSel) {
     el.replaceWith(nw);
     const tgt = focusSel ? nw.querySelector(focusSel) : ff ? nw.querySelector(`[data-f="${ff}"]`) : null;
     tgt?.focus({ preventScroll: true });
+    if (open && tgt && tgt.showPicker) setTimeout(() => { try { tgt.showPicker(); } catch (e) { /* без жеста не открыть */ } }, 60);
     if (window.scrollY !== wy) window.scrollTo(0, wy);
   }
   qFootDraw();
@@ -8077,14 +8083,14 @@ document.addEventListener("change", ev => {
     if (!e.gNew && !qGm(e.type)[e.group]) { e.group = ""; e.sub = ""; e.sNew = false; }
     else if (!e.sNew && !sOK()) e.sub = "";
   } else if (f.dataset.f === "group") {
-    if (v === ALL_G) { (S.qAllCats = S.qAllCats || {})[key] = true; redrawRow(key, '[data-f="group"]'); return; }
+    if (v === ALL_G) { (S.qAllCats = S.qAllCats || {})[key] = true; redrawRow(key, '[data-f="group"]', true); return; }
     if (v === NEW_OPT) { S.qAdd = { key, kind: "group", name: "", err: "" }; redrawRow(key, "[data-qaddname]"); return; }
     e.gNew = false; e.group = v; e.sNew = false;
     // смена группы сохраняет совместимую подстатью, несовместимую — очищает
     const subs = (qGm(e.type)[e.group] || []).filter(s => s !== "❓");
     e.sub = subs.includes(e.sub) ? e.sub : subs.length === 1 ? subs[0] : "";
   } else if (f.dataset.f === "sub") {
-    if (v === ALL_S) { (S.qAllSubs = S.qAllSubs || {})[key] = true; redrawRow(key, '[data-f="sub"]'); return; }
+    if (v === ALL_S) { (S.qAllSubs = S.qAllSubs || {})[key] = true; redrawRow(key, '[data-f="sub"]', true); return; }
     if (v === NEW_OPT) { if (!e.group) return; S.qAdd = { key, kind: "sub", name: "", err: "" }; redrawRow(key, "[data-qaddname]"); return; }
     e.sNew = false; e.sub = v;
   } else return;
@@ -9262,10 +9268,10 @@ $("cKindIn").addEventListener("click", () => cashKind("in"));
 const CASH_CAT = "koshelek.cashcat";
 function syncCashSelects(g, s) {
   const groups = S.cashKind === "in" ? (S.catalog?.types?.["Доход"] || {}) : catGroups();
-  const names = Object.keys(groups).filter(x => x !== "❓");
+  const names = Object.keys(groups).filter(x => x !== "❓").sort(RU);
   if (g === undefined) { try { const l = JSON.parse(localStorage.getItem(CASH_CAT) || "{}")[S.cashKind]; if (l && names.includes(l.g)) { g = l.g; s = s || l.s; } } catch (e) { /* нет хранилища */ } }
   $("cGroup").innerHTML = '<option value="">— группа —</option>' + names.map(x => `<option>${esc(x)}</option>`).join(""); $("cGroup").value = names.includes(g) ? g : "";
-  const subs = (groups[$("cGroup").value] || []).filter(x => x !== "❓");
+  const subs = (groups[$("cGroup").value] || []).filter(x => x !== "❓").sort(RU);
   $("cSub").innerHTML = (subs.length === 1 ? "" : '<option value="">— подстатья —</option>') + subs.map(x => `<option>${esc(x)}</option>`).join(""); $("cSub").value = subs.includes(s) ? s : subs.length === 1 ? subs[0] : "";
 }
 $("cGroup").addEventListener("change", () => syncCashSelects($("cGroup").value));
@@ -9607,7 +9613,7 @@ RENDER.imp = function () {
   const box = $("impBox"), imp = S.imp;
   { $("perCards").innerHTML = perCardsHtml(); const n = allOps().filter(o => !isManual(o)).length; $("impTotal").hidden = true; $("impTotal").textContent = false ? `Загружено ${pl(n, "операция", "операции", "операций")}` : ""; }
   const qn = S.impQueue.length, dn = S.impDone.length;
-  $("impDropText").textContent = (imp && imp.stage !== "done" ? `Файл: ${imp.name}${imp.size ? ` (${Math.max(1, Math.round(imp.size / 1024))} КБ)` : ""}${imp.sheet ? `, лист «${imp.sheet}»` : ""}` : "CSV или Excel из интернет-банка. Можно сразу несколько.")
+  $("impDropText").textContent = (imp && imp.stage !== "done" ? `Файл: ${imp.name}${imp.size ? ` (${Math.max(1, Math.round(imp.size / 1024))} КБ)` : ""}${imp.sheet ? `, лист «${imp.sheet}»` : ""}` : "CSV или Excel. Можно несколько.")
     + (imp && imp.stage !== "done" && (qn || dn) ? ` · загружено ${dn}, в очереди ${qn}` : "");
   $("impDrop").hidden = false;   // после загрузки поле выбора файлов остаётся — следующая выписка без лишних кнопок
   const waitQ = S.impWait && S.impQueue.length ? `<p class="note run">Апп занят — ${pl(S.impQueue.length, "файл начнёт", "файла начнут", "файлов начнут")} разбираться сами.</p>` : "";
@@ -10284,7 +10290,7 @@ function openOp(id) {
 }
 function syncGroups(g, s) {
   const groups = S.catalog?.types?.[$("eType").value === "Возврат" ? "Расход" : $("eType").value] || {};
-  const gn = Object.keys(groups).filter(x => x !== "❓");
+  const gn = Object.keys(groups).filter(x => x !== "❓").sort(RU);
   fillSelect($("eGroup"), gn.concat([NEW_OPT]), gn.includes(g) ? g : gn[0]);
   syncSubs(s);
 }
@@ -10292,7 +10298,7 @@ function syncSubs(s) {
   const groups = S.catalog?.types?.[$("eType").value === "Возврат" ? "Расход" : $("eType").value] || {};
   const isNewG = $("eGroup").value === NEW_OPT;
   $("eNewGWrap").hidden = !isNewG;
-  const subs = isNewG ? [] : (groups[$("eGroup").value] || []).filter(x => x !== "❓");
+  const subs = isNewG ? [] : (groups[$("eGroup").value] || []).filter(x => x !== "❓").sort(RU);
   fillSelect($("eSub"), subs.concat([NEW_OPT]), subs.includes(s) ? s : subs[0] || NEW_OPT);
   $("eNewSWrap").hidden = $("eSub").value !== NEW_OPT;
 }
@@ -10444,6 +10450,7 @@ const recCats = () => S.rec.kind === "in" ? (S.catalog?.types?.["Доход"] ||
 function recGroups(g, s) {
   const R = S.rec, gn = Object.keys(recCats()).filter(x => x !== "❓");
   if (g && g === R.g0 && g !== "❓" && R.kind === R.k0 && !gn.includes(g)) gn.unshift(g);   // своя категория вне справочника — не теряется
+  gn.sort(RU);
   const def = R.kind === "in" ? (gn.includes("Доход") ? "Доход" : gn[0]) : (gn.includes("Продукты") ? "Продукты" : gn[0]);
   fillSelect($("rGroup"), gn.concat([NEW_OPT]), gn.includes(g) ? g : def);
   recSubs(s);
@@ -10451,7 +10458,7 @@ function recGroups(g, s) {
 function recSubs(s) {
   const R = S.rec, isNewG = $("rGroup").value === NEW_OPT;
   $("rNewGWrap").hidden = !isNewG;
-  const subs = isNewG ? [] : (recCats()[$("rGroup").value] || []).filter(x => x !== "❓");
+  const subs = isNewG ? [] : (recCats()[$("rGroup").value] || []).filter(x => x !== "❓").sort(RU);
   if (s && s === R.s0 && $("rGroup").value === R.g0 && R.kind === R.k0 && s !== "❓" && !subs.includes(s)) subs.unshift(s);
   fillSelect($("rSub"), subs.concat([NEW_OPT]), subs.includes(s) ? s : subs[0] || NEW_OPT);
   $("rNewSWrap").hidden = $("rSub").value !== NEW_OPT;
