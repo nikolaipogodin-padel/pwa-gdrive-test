@@ -1086,9 +1086,9 @@ body.is-onb3 #qHint, body.is-onb3 #qSum { display: none; }
 .qfoot-btns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
 body.is-onb3 .qfoot-btns { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
 .qfoot-btns .btn { min-height: 57px; padding: 8px 9px; line-height: 1.25; font-size: var(--fs-m); letter-spacing: -.2px; white-space: normal; }
-#qPostpone { font-size: 12px; border: 1px solid #b9cbd4; background: #f4f8fa; color: #4d6274; }
+#qPostpone, #qNextPer { font-size: 12px; border: 1px solid #b9cbd4; background: #f4f8fa; color: #4d6274; }
 #qFootMore { display: block; margin: 0 0 6px; }
-@media (max-width: 400px) { .qfoot-btns .btn { font-size: 12px; } #qPostpone { font-size: 11px; } }
+@media (max-width: 400px) { .qfoot-btns .btn { font-size: 12px; } #qPostpone, #qNextPer { font-size: 11px; } }
 /* вводное окно */
 .coach-overlay { position: fixed; inset: 0; background: rgba(13, 24, 38, .32); display: grid; place-items: center; padding: 18px; z-index: 40; }
 .coach-card { width: min(100%, 430px); background: var(--surface, #fff); border-radius: 18px; padding: 20px 18px 18px; box-shadow: 0 18px 50px rgba(9, 23, 35, .18); display: grid; gap: 12px; }
@@ -1591,7 +1591,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div class="qlist" id="qList"><div class="empty">Открытых вопросов нет.</div></div>
     <button class="btn more-btn" type="button" id="qMore" hidden>Показать ещё</button>
     <button type="button" class="show-more-row" id="qShowMore" aria-expanded="false" hidden><span class="more-chev" aria-hidden="true"></span><span></span></button>
-    <div class="qfoot" id="qFoot" hidden><span id="qFootT" class="vh"></span><span class="small muted" id="qFootMore" hidden></span><div class="qfoot-btns"><button class="btn primary" type="button" id="qFootGo" disabled>Подтвердить отмеченные</button><button class="btn" type="button" id="qPostpone" hidden>Отложить и открыть главную</button></div></div>
+    <div class="qfoot" id="qFoot" hidden><span id="qFootT" class="vh"></span><span class="small muted" id="qFootMore" hidden></span><div class="qfoot-btns"><button class="btn primary" type="button" id="qFootGo" disabled>Подтвердить отмеченные</button><button class="btn" type="button" id="qPostpone" hidden>Отложить и открыть главную</button><button class="btn" type="button" id="qNextPer" hidden>Оставить и перейти к ранним месяцам</button></div></div>
     <h2 class="sub-h" id="warnH" hidden>Замечания пересчёта</h2>
     <ul class="plain" id="warnList" hidden></ul>
   </section>
@@ -3176,15 +3176,17 @@ function loadOverrides(raw, journal) {
 }
 function classify(op, rules, overrides, derived, ctx = null) {
   if (isManual(op)) return { type: op.type, group: op.group, sub: op.sub, rule: op.rule, status: op.status };
+  const noInc = (x) => x && x.type === 'Доход' && op.amount < 0;   // П13.11: списание не бывает доходом
   let o = pget(overrides, op.id);
-  if (truthy(o)) return { type: o.type, group: o.group, sub: o.sub, rule: 'правка', status: 'подтверждено' };
+  if (truthy(o) && !noInc(o)) return { type: o.type, group: o.group, sub: o.sub, rule: 'правка', status: 'подтверждено' };
   o = pget(derived || {}, op.id);
-  if (truthy(o)) return { type: o.type, group: o.group, sub: o.sub, rule: 'предварительная запись', status: 'подтверждено' };
+  if (truthy(o) && !noInc(o)) return { type: o.type, group: o.group, sub: o.sub, rule: 'предварительная запись', status: 'подтверждено' };
   const text = `${op.cp} | ${op.info}`;
   const dir = op.amount > 0 ? 'in' : 'out';
   let nT = null, nC = null, nI = null;   // нормализованные тексты — по первому правилу словаря
   for (const { r, re, de } of rules) {
     if (r.dir !== 'any' && r.dir !== dir) continue;
+    if (r.type === 'Доход' && dir === 'out') continue;                         // П13.11: списание не бывает доходом
     if (r.src === INCOME_SRC && INCOME_NOT.test(op.info || '')) continue;   // 1.7.3: компенсация расходов от работодателя — не зарплата, решает человек
     if (r.own && ctx && ctx.own && !ctx.own(op.acct)) continue;             // 1.8.0: только для своего счёта (пополнение Revolut)
     let hit;
@@ -7447,7 +7449,7 @@ const markTxt = m => m ? `${SRC_TXT[m.src] || m.src} · ${CHK_TXT[m.chk] || m.ch
 const srcOfChoice = c => c.conf === "user" ? "user" : c.by === "Claude" ? "ai" : "rule";
 const COST_T = ["Расход", "Возврат", "Погашение долга"];
 /* для поступления тип «Расход» показывается как «Возврат»: деньги вернулись по статье траты и уменьшают её */
-const typesFor = (types, dirIn) => dirIn ? types.map(t => t === "Расход" ? "Возврат" : t) : types;
+const typesFor = (types, dirIn) => dirIn ? types.map(t => t === "Расход" ? "Возврат" : t) : types.filter(t => t !== "Доход");   // П13.11
 const typeShown = (t, dirIn) => dirIn && t === "Расход" ? "Возврат" : t;
 const OPS_PAGE = 30;
 const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
@@ -7706,6 +7708,7 @@ function qPrefill(x) {
 function choiceOf(x) {
   if (S.qEdit[x.key]) return S.qEdit[x.key];
   let s = sugItems()[bk(x)] || learnSuggest(x) || localSuggest(x);
+  if (s && s.type === "Доход" && x.dir !== "in") s = null;   // П13.11: списание не бывает доходом
   if (s && (s.unknown || (s.by === "Claude" && s.conf !== "high" && s.group === "Прочие расходы" && s.sub === "Прочие расходы"))) s = null;   // П10.4 (5): «не знаю» — не «Прочее»: категория не подставляется
   const marker = (s && validMarker(x, s.marker)) || validMarker(x, x.name);
   const c = s ? { type: s.type || "", group: s.group || "", sub: s.sub || "", rule: !!marker && s.conf === "user" && s.rule !== false, marker, conf: s.conf || "low", by: s.by || "Claude", why: s.why || "", pv: s.pv || "" }
@@ -8013,6 +8016,7 @@ function qFootDraw(V) {
   $("qFootGo").disabled = !F.on.length || !!S.busy;
   $("qFootGo").textContent = `Подтвердить отмеченные ${F.on.length} из ${V.list.length}`;
   $("qPostpone").hidden = onbStep() !== 3;
+  $("qNextPer").hidden = !(onbStep() !== 3 && V.per === "rec" && perBounds().old && !histOpen());   // П13.11: оставить как есть и открыть разбор остальных месяцев выписки
 }
 const qFind = key => qGroups().find(x => x.key === key);
 function qEditOf(key) { const x = qFind(key); if (!x) return null; if (!S.qEdit[key]) S.qEdit[key] = Object.assign({}, choiceOf(x), { dirty: false }); return { x, e: S.qEdit[key] }; }
@@ -8153,6 +8157,11 @@ $("qFootGo").addEventListener("click", async () => {
 });
 $("qCoachGo").addEventListener("click", () => { S.qIntroDone = true; $("qCoach").hidden = true; });
 $("qPostpone").addEventListener("click", () => { qCollapse(); onbFinish(); });
+$("qNextPer").addEventListener("click", async () => {
+  logEv("click", "qNextPer"); qCollapse();
+  await act("Открываю историю…", () => { const p = S.inputs.profile; if (p.hist !== "later") return false; p.hist = "open"; p.updated = nowStr(); });
+  logEv("hist", "open"); S.qPer = "old"; S.qTab = null; S.qLimit = 40; S.sugTried = false; selectTab("q"); window.scrollTo?.({ top: 0 });
+});
 $("qSearch").addEventListener("input", () => { qCollapse(); S.qQ = $("qSearch").value; S.qLimit = 40; draw("questions"); });
 /* П10.8: отмена — после массового подтверждения, одиночного «Сохранить» и автоматической мелочи; текст говорит, что именно отменится.
    Сообщение 15 с или «×» → короткая ссылка с тем же описанием — на любой вкладке до следующего изменения данных.
@@ -9070,6 +9079,7 @@ function suggestPrompt(chunk, types, opt = {}) {
 ${catText(types)}
 Правила:
 - Расход: покупки, услуги, счета, налоги, штрафы, комиссии. Доход: зарплата, пенсия, пособия, субсидии, возврат налога. Перемещение: между своими счетами, снятие и взнос наличных, погашение кредитной карты. «Погашение долга»: тело кредита.
+- Списание (out) никогда не «Доход». Доход бывает только у поступлений (in).
 - Поступление, которое возвращает трату, — "Расход" с группой этой траты (апп запишет возвратом): возврат покупки; перевод от человека с назначением-тратой (обед, кофе, падел, гольф, баня, билеты, поездка, подарок); страховая выплата или компенсация (atlīdzība, izmaksa, kompensācija) — группа компенсированного (лечение — «Здоровье», авто — «Авто»).
 - kind: "company" (компания, магазин, сервис, сайт, учреждение), "person" (частное лицо), "own" (свои счета, наличные).
 - Перевод человеку или от человека без понятного назначения — unknown: true, kind "person", без группы. Доход не угадывай.
@@ -9111,7 +9121,7 @@ async function askClaude(groups, { signal, progress, noClaude, onPart } = {}) {
         const x = r && chunk[(parseInt(r.k, 10) || 0) - 1]; if (!x) continue;
         const c = { type: String(r.type || "") === "Возврат" ? "Расход" : String(r.type || ""), group: String(r.group || ""), sub: String(r.sub || "") };
         const fx = kwFix(c); if (fx === 3) r.confidence = "low";
-        const ok = catOK(c), kind = ["company", "person", "own"].includes(r.kind) ? r.kind : "";
+        const ok = catOK(c) && !(c.type === "Доход" && x.dir !== "in"), kind = ["company", "person", "own"].includes(r.kind) ? r.kind : "";
         // П10.4 (5): «не знаю» — отдельное состояние; «Прочее / Прочее» без уверенности — тоже «не знаю», а не категория
         const unknown = r.unknown === true || !ok || (c.group === "Прочие расходы" && c.sub === "Прочие расходы" && r.confidence !== "high");
         if (!ok && r.unknown !== true && (r.group || r.sub) && (out.dropN = (out.dropN || 0) + 1) <= 8) logEv("ai-drop", `${x.name.slice(0, 30)} ← ${r.type}/${r.group}/${r.sub}`);
