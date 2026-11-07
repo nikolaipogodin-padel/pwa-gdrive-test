@@ -6921,14 +6921,20 @@ function homeCats(f, k) {
       <div class="cat-det" id="cd${i}"${open ? "" : " hidden"}>${open ? catDetail(r, f, k) : ""}</div></li>`;
   }).join("");
   // П10.4 (10): списания без категории не прячутся — отдельная строка «Не определено» (в «Потрачено» и % не входят)
-  const un = undefOps(f.month).filter(o => o.a < 0), us = -un.reduce((a, o) => a + o.a, 0);
+  const un = undefOps(f.month).filter(o => o.a < 0), us = -un.reduce((a, o) => a + o.a, 0); S.undefM = f.month;
   if (un.length) {
     const li = `<li class="cat undef" data-big="❓"><button class="cat-btn" type="button" data-undef="1" aria-label="${esc(`Не определено: ${pl(un.length, "списание", "списания", "списаний")} на ${eur(us)} €, в расходы не входят`)}"><span class="cat-name">Не определено · уточнить</span><span class="cat-val">${E0(us)}<small>${un.length} опер.</small></span></button></li>`;
     $("hCats").insertAdjacentHTML("afterbegin", li);   // П11.6.2: «Не определено» — первой строкой
   }
 }
+/* П13.12: «Не определено · уточнить» — если все списания без статьи из ранней истории, открыть разбор «Ранее» (история включается) */
+async function undefOpen(ops) {
+  const ff = focusFrom().slice(0, 7), old = !!ff && ops.length > 0 && ops.every(o => String(o.d).slice(0, 7) < ff);
+  if (old && !histOpen()) { await act("Открываю историю…", () => { const p = S.inputs.profile; if (p.hist !== "later") return false; p.hist = "open"; p.updated = nowStr(); }); logEv("hist", "open"); }
+  S.qPer = old ? "old" : null; S.qTab = null; S.qLimit = 40; S.sugTried = false; selectTab("q");
+}
 $("hCats").addEventListener("click", ev => {
-  if (ev.target.closest("[data-undef]")) { selectTab("q"); return; }
+  if (ev.target.closest("[data-undef]")) { undefOpen(undefOps(S.undefM).filter(o => o.a < 0)); return; }
   const btn = ev.target.closest(".cat-btn"); if (!btn) return;
   const li = btn.closest(".cat"), big = li.dataset.big, det = li.querySelector(".cat-det"), f = HF(); if (!f) return;
   const open = btn.getAttribute("aria-expanded") !== "true";
