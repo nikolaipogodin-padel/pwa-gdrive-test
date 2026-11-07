@@ -1225,6 +1225,16 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 .stmt-label{font-size:var(--fs-s);font-weight:600}
 .task-h{font-size:var(--fs-l);font-weight:700}
 #p-in .prelim-h{font-size:var(--fs-m);font-weight:700;color:var(--ink)}
+/* П13.8: компактно + микрофон-иконка */
+.kw-mw { position: relative; display: block; width: 100%; } .kw-mw > :is(input, textarea) { padding-right: 46px; }
+.kw-mic { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+.kw-mw:has(textarea) .kw-mic { top: auto; bottom: 5px; transform: none; } .kw-mic.rec { background: #d93025; color: #fff; } .kw-mst { display: block; margin-top: 2px; }
+#p-in .card, #p-in .cashform { padding: 12px 14px; border-radius: 14px; gap: 8px; }
+#p-in .card h2, #p-in .cashform h2 { font-size: 17px; margin: 0 0 6px; }
+#p-in textarea { min-height: 48px; padding: 9px 46px 9px 12px; }
+#p-in .imp .drop { display: flex; align-items: center; gap: 10px; padding: 8px 10px; } #p-in .imp .drop .btn { min-height: 44px; font-size: var(--fs-m); padding: 8px 14px; flex: none; }
+#p-in .imp .drop > span { font-size: var(--fs-s); line-height: 1.3; }
+#p-in .in-row { gap: 8px; } #p-in .in-row .btn.primary { min-height: 44px; } #p-in .in-row .drop { padding: 4px 6px; } #inDropText { display: none; }
 .prelim-h>span:first-child{min-width:0;flex:1 1 auto}
 .pbar-in.ind{width:35%!important;animation:kwInd 1.3s ease-in-out infinite alternate}
 @keyframes kwInd{from{margin-left:0}to{margin-left:65%}}
@@ -1467,7 +1477,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 
     <form class="cashform" id="inForm">
       <h2>Траты вне выписки</h2>
-      <textarea id="inText" rows="3" aria-label="Траты текстом или голосом" placeholder="Rimi 23,40; бензин 60; наличными рынок 15"></textarea>
+      <textarea id="inText" rows="2" aria-label="Траты текстом или голосом" placeholder="Rimi 23,40; бензин 60; наличными рынок 15"></textarea>
       <div class="in-row"><div class="drop" id="inDrop" tabindex="0">
         <span id="inDropText">Скриншоты или фото чеков.</span>
         <label class="btn filebtn">Фото<input id="inFile" type="file" accept="image/*" multiple class="vh"></label>
@@ -1486,19 +1496,15 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   </section>
 
   <section id="p-cash" role="tabpanel" aria-labelledby="t-cash" hidden>
-    <div class="cashform kw-cq" id="cqBox">
-      <label><span>Что купили — текстом или голосом</span><textarea id="cqText" rows="2" aria-label="Что купили наличными, свободным текстом" placeholder="Вчера на рынке овощи 15 и кофе 3,50"></textarea></label>
-      <div class="in-row"><span class="small muted" id="cqMsg" aria-live="polite"></span><button class="btn primary" type="button" id="cqGo">Определить</button></div>
-    </div>
     <form class="cashform" id="cashForm">
       <div class="seg-ctl cash-kind" role="group" aria-label="Что внести"><button type="button" id="cKindOut" aria-pressed="true">Трата наличными</button><button type="button" id="cKindIn" aria-pressed="false">Доход наличными</button></div>
       <div class="cashgrid">
         <label>Дата<input id="cDate" type="date" required></label>
-        <label>Сумма, €<input id="cAmt" type="text" inputmode="decimal" autocomplete="off" required placeholder="15,00"></label>
+        <label>Сумма, €<input id="cAmt" type="text" inputmode="decimal" autocomplete="off" placeholder="15,00"></label>
         <label>Группа<select id="cGroup"></select></label>
         <label>Подстатья<select id="cSub"></select></label>
       </div>
-      <div class="note-row"><label><span id="cNoteL">Что купили</span><input id="cNote" type="text" placeholder="Рынок, овощи"></label><button class="btn primary" type="submit" id="cSave">Добавить</button></div>
+      <div class="note-row"><label><span id="cNoteL">Что купили</span><input id="cNote" type="text" placeholder="Рынок, овощи 15 — ИИ заполнит сумму и категорию"></label><button class="btn primary" type="submit" id="cSave">Добавить</button></div>
       <span class="small muted" id="cMsg" aria-live="polite"></span>
     </form>
     <button type="button" class="cash-tile" id="cashTile" aria-expanded="false" aria-controls="cashFn"><span>Наличные сейчас</span><b class="num" id="cashNowV">—</b></button>
@@ -9248,7 +9254,7 @@ function cashKind(k) {
   S.cashKind = k; const inc = k === "in";
   $("cKindOut").setAttribute("aria-pressed", String(!inc)); $("cKindIn").setAttribute("aria-pressed", String(inc));
   $("cNoteL").textContent = inc ? "От кого, за что" : "Что купили"; $("cNote").placeholder = inc ? "Продажа, подработка" : "Рынок, овощи";
-  $("cMsg").textContent = ""; syncCashSelects(); $("cqBox").hidden = inc;
+  $("cMsg").textContent = ""; syncCashSelects();
 }
 $("cKindOut").addEventListener("click", () => cashKind("out"));
 $("cKindIn").addEventListener("click", () => cashKind("in"));
@@ -9275,6 +9281,7 @@ cashDateSync();
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cashDateSync(); });
 $("cashForm").addEventListener("submit", async ev => {
   ev.preventDefault();
+  if (S.cashKind !== "in" && $("cNote").value.trim() && (!(parseFloat(String($("cAmt").value).replace(/\s/g, "").replace(",", ".")) > 0) || !$("cGroup").value || !$("cSub").value)) { await cashAI(); return; }
   const amount = Math.round(parseFloat(String($("cAmt").value).replace(/\s/g, "").replace(",", ".")) * 100) / 100;
   if (!(amount > 0)) { $("cMsg").className = "small errmsg"; $("cMsg").textContent = "Укажите сумму больше нуля."; return; }
   if (!$("cDate").value || $("cDate").value > todayISO()) { $("cMsg").className = "small errmsg"; $("cMsg").textContent = "Дата должна быть не позже сегодняшней."; return; }
@@ -9292,18 +9299,18 @@ $("cashForm").addEventListener("submit", async ev => {
     if (S.cashFill) { const left = cashLedger().months.find(y => y.m === S.cashFill.m)?.un; if (!(left > 0.005)) S.cashFill = null; else $("cMsg").textContent += ` Не расписано ещё ${eur(left)} €.`; }
   }
 });
-/* П13.7 (E1): наличные свободным текстом — ИИ определяет дату, сумму, категорию и заполняет форму; несколько покупок — в разбор трат */
+/* П13.8: «Что купили» — свободный текст; если сумма или категория не заполнены, «Добавить» просит ИИ определить всё и заполняет форму */
 let cqCtl = null;
-async function cqRun() {
-  const msg = $("cqMsg"); msg.className = "small muted";
-  const text = $("cqText").value.trim();
-  if (!text) { msg.textContent = "Напишите, что купили."; return; }
+async function cashAI() {
+  const msg = $("cMsg"); msg.className = "small muted";
+  const note = $("cNote").value.trim(), amt0 = $("cAmt").value.trim();
   if (!S.sample) S.sample = await use("sample");
   if (!S.sample) { msg.className = "small errmsg"; msg.innerHTML = `ИИ не подключён. Ключ Gemini: <button type="button" class="linkbtn" id="inPerm">Подключения</button>`; return; }
-  cqCtl = new AbortController(); $("cqGo").disabled = true; $("cqGo").classList.add("working"); msg.textContent = "ИИ определяет…";
+  cqCtl = new AbortController(); $("cSave").disabled = true; $("cSave").classList.add("working"); msg.textContent = "ИИ определяет…";
   aiLock("Определяю покупку…", () => cqCtl?.abort());
   try {
     const c0 = performance.now();
+    const text = note + (amt0 && !/\d/.test(note) ? " " + amt0 : "");
     let a = await S.sample.json(promptFor("наличными: " + text, 0), { modelTier: aiModel(), cache: false, signal: cqCtl.signal });
     if (!Array.isArray(a) && a && typeof a === "object") a = Object.values(a).find(Array.isArray) || [a];
     logEv("claude", `наличные текстом ${Math.round(performance.now() - c0)} мс`);
@@ -9312,18 +9319,17 @@ async function cqRun() {
       const g = groups[x.group] ? x.group : "", sub = g && (groups[g] || []).includes(x.sub) ? x.sub : "";
       return { date: /^\d{4}-\d{2}-\d{2}$/.test(x.date) && x.date <= todayISO() ? x.date : todayISO(), amount: Math.round(+x.amount * 100) / 100, desc: String(x.desc || "").slice(0, 80), group: g, sub, low: x.confidence === "low" || !g || !sub };
     });
-    if (!items.length) msg.textContent = "ИИ не нашёл суммы. Напишите, например: «рынок овощи 15».";
+    if (!items.length) { msg.className = "small errmsg"; msg.textContent = "ИИ не нашёл сумму. Допишите её, например: «рынок овощи 15»."; }
     else if (items.length === 1) {
       const p = items[0];
-      $("cDate").value = p.date; $("cAmt").value = String(p.amount).replace(".", ","); $("cNote").value = p.desc;
-      syncCashSelects(p.group, p.sub); S.cashOdd = null;
+      if (!amt0) { $("cAmt").value = String(p.amount).replace(".", ","); $("cDate").value = p.date; }
+      $("cNote").value = p.desc || note; syncCashSelects(p.group, p.sub); S.cashOdd = null;
       msg.className = "small " + (p.low ? "errmsg" : "okmsg");
-      msg.textContent = p.low ? "Категорию не уверен — выберите в форме ниже и нажмите «Добавить»." : `${p.group} / ${p.sub}. Проверьте форму ниже и нажмите «Добавить».`;
-      $("cqText").value = "";
+      msg.textContent = p.low ? "Категорию не уверен — выберите и нажмите «Добавить»." : `${p.group} / ${p.sub}. Проверьте и нажмите «Добавить».`;
     } else {
       S.props = items.map(p => { const g = p.group || (groups["Прочие расходы"] ? "Прочие расходы" : Object.keys(groups)[0]), sub = (groups[g] || []).includes(p.sub) ? p.sub : (groups[g] || [])[0];
         const r = { date: p.date, amount: p.amount, desc: p.desc, kind: "cash", group: g, sub, confidence: p.low ? "low" : "high", on: true, acct: "" }; r.dupManual = knownManual(r); if (r.dupManual && !r.dupManual.near) r.on = false; return r; });
-      $("cqText").value = ""; msg.textContent = "";
+      $("cNote").value = ""; $("cAmt").value = ""; msg.textContent = "";
       draw("props"); $("t-in").click();
       $("inMsg").className = "small muted"; $("inMsg").textContent = `Найдено: ${pl(S.props.length, "запись", "записи", "записей")} наличными. Проверьте и сохраните.`;
     }
@@ -9332,37 +9338,30 @@ async function cqRun() {
     if (e?.code === "cancelled") msg.textContent = "Остановлено.";
     else { msg.className = "small errmsg"; msg.textContent = pickErr({ not_granted: "Разбор не разрешён.", rate_limited: "Слишком много запросов. Подождите минуту.", invalid_json: "ИИ ответил не в том формате. Нажмите ещё раз.", empty_completion: "ИИ не ответил. Нажмите ещё раз.", upstream_error: "Сбой связи. Нажмите ещё раз." }, e, "Не получилось определить."); }
   }
-  aiUnlock(); $("cqGo").disabled = false; $("cqGo").classList.remove("working");
+  aiUnlock(); $("cSave").disabled = false; $("cSave").classList.remove("working");
 }
-$("cqGo").addEventListener("click", cqRun);
-$("cqText").addEventListener("keydown", ev => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); cqRun(); } });
-/* П13.7 (E1): голосовой ввод в текстовых полях (браузерное распознавание речи; язык РУ/LV — переключатель, запоминается) */
+/* П13.8: голосовой ввод — иконка 🎤 в поле справа (браузерное распознавание речи, русский) */
 const kwSR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function kwMic(el) {
   if (!el || !kwSR || el.dataset.mic) return; el.dataset.mic = "1";
-  const row = document.createElement("div"); row.className = "kw-mic-row";
-  const mic = document.createElement("button"), lg = document.createElement("button"), st = document.createElement("span");
-  mic.type = lg.type = "button"; mic.className = "btn"; lg.className = "btn"; st.className = "small muted";
-  mic.textContent = "🎤 Голос"; mic.setAttribute("aria-label", "Ввод голосом");
-  const lang = () => { try { return localStorage.getItem("koshelek.stt") || "ru-RU"; } catch (e) { return "ru-RU"; } };
-  const lgT = () => { lg.textContent = lang() === "lv-LV" ? "LV" : "RU"; lg.setAttribute("aria-label", "Язык речи: " + (lang() === "lv-LV" ? "латышский" : "русский")); };
-  lgT(); lg.addEventListener("click", () => { try { localStorage.setItem("koshelek.stt", lang() === "lv-LV" ? "ru-RU" : "lv-LV"); } catch (e) { /* нет хранилища */ } lgT(); });
+  const w = document.createElement("span"); w.className = "kw-mw"; el.parentNode.insertBefore(w, el); w.appendChild(el);
+  const mic = document.createElement("button"); mic.type = "button"; mic.className = "kw-mic"; mic.textContent = "🎤"; mic.setAttribute("aria-label", "Ввод голосом");
+  const st = document.createElement("span"); st.className = "small errmsg kw-mst"; st.hidden = true;
+  w.appendChild(mic); w.insertAdjacentElement("afterend", st);
+  const reset = () => { mic.classList.remove("rec"); mic.textContent = "🎤"; };
   let rec = null;
-  const stop = () => { try { rec && rec.stop(); } catch (e) { /* уже остановлено */ } };
   mic.addEventListener("click", () => {
-    if (rec) { stop(); return; }
-    rec = new kwSR(); rec.lang = lang(); rec.interimResults = false; rec.continuous = true;
-    const base = el.value; let got = "";
-    rec.onresult = ev => { got = ""; for (const r of ev.results) got += r[0].transcript; el.value = (base + (base && !/\s$/.test(base) ? " " : "") + got).trimStart(); el.dispatchEvent(new Event("input", { bubbles: true })); };
-    rec.onerror = ev => { st.className = "small errmsg"; st.textContent = ev.error === "not-allowed" || ev.error === "service-not-allowed" ? "Нет доступа к микрофону. Разрешите его для сайта." : ev.error === "no-speech" ? "Речь не слышно." : ev.error === "network" ? "Нет связи для распознавания." : "Голос не сработал [" + ev.error + "]."; };
-    rec.onend = () => { rec = null; mic.classList.remove("rec"); mic.textContent = "🎤 Голос"; if (st.className.indexOf("errmsg") < 0) st.textContent = ""; };
-    st.className = "small muted"; st.textContent = "Говорите…"; mic.classList.add("rec"); mic.textContent = "■ Стоп";
-    try { rec.start(); } catch (e) { rec = null; mic.classList.remove("rec"); mic.textContent = "🎤 Голос"; st.className = "small errmsg"; st.textContent = "Не удалось включить микрофон."; }
+    if (rec) { try { rec.stop(); } catch (e) { /* уже остановлено */ } return; }
+    rec = new kwSR(); rec.lang = "ru-RU"; rec.interimResults = false; rec.continuous = true;
+    const base = el.value; st.hidden = true;
+    rec.onresult = ev => { let got = ""; for (const r of ev.results) got += r[0].transcript; el.value = (base + (base && !/\s$/.test(base) ? " " : "") + got).trimStart(); el.dispatchEvent(new Event("input", { bubbles: true })); };
+    rec.onerror = ev => { st.hidden = false; st.textContent = ev.error === "not-allowed" || ev.error === "service-not-allowed" ? "Нет доступа к микрофону. Разрешите его для сайта." : ev.error === "no-speech" ? "Речь не слышно." : ev.error === "network" ? "Нет связи для распознавания." : "Голос не сработал [" + ev.error + "]."; };
+    rec.onend = () => { rec = null; reset(); };
+    mic.classList.add("rec"); mic.textContent = "⏹";
+    try { rec.start(); } catch (e) { rec = null; reset(); st.hidden = false; st.textContent = "Не удалось включить микрофон."; }
   });
-  row.append(mic, lg, st);
-  const host = el.closest(".note-row") || el.closest("label") || el; host.insertAdjacentElement("afterend", row);
 }
-["inText", "cqText", "cNote", "sNotes", "eNote"].forEach(id => kwMic($(id)));
+["inText", "cNote", "sNotes", "eNote"].forEach(id => kwMic($(id)));
 $("cashTile").addEventListener("click", () => { S.cashOpen = !S.cashOpen; draw("cash"); });
 RENDER.cash = function () {
   cashDateSync();
