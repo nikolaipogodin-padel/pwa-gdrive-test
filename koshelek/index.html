@@ -990,7 +990,7 @@ body.is-onbai #p-q, body.is-onbai #qFoot, body.is-onbai #undoBar { display: none
 .inc-pur { margin: 6px 0 0 39px; } .inc-pur > summary { color: var(--accent); font-size: var(--fs-m); font-weight: 700; min-height: 40px; }
 .bank-list { border-top: 1px solid #d4dee7; margin: 4px 0 0 -39px; padding: 7px 0 2px 39px; }
 .bank-item { display: grid; grid-template-columns: minmax(0, 1fr) max-content; column-gap: 8px; align-items: start; padding: 7px 0; font-size: 12px; line-height: 1.4; color: #5d6c82; }
-.bank-left { min-width: 0; overflow-wrap: anywhere; } .kw-cq { margin-bottom: 10px; } .kw-cq .in-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 6px; } .kw-mic-row { display: flex; gap: 6px; align-items: center; margin: 4px 0 2px; } .kw-mic-row .btn { min-height: 36px; padding: 4px 12px; font-size: var(--fs-s); } .kw-mic-row .btn.rec { background: #d93025; color: #fff; border-color: #d93025; } .kw-mic-row .small { overflow-wrap: anywhere; } .bal-sec > summary span::before { color: var(--muted) !important; font-size: inherit !important; width: 1em !important; } details.more > summary::-webkit-details-marker, .sub-tree summary::-webkit-details-marker { display: none; } details.more > summary::before, .sub-tree details > summary > :first-child::before { content: "▸"; color: var(--muted); display: inline-block; width: 1em; flex: none; } details.more[open] > summary::before, .sub-tree details[open] > summary > :first-child::before { content: "▾"; } details.more > summary { list-style: none; } .kw-slot-off { display: none !important; } .kw-raw { display: block; margin-top: 2px; } .kw-raw summary { display: inline; cursor: pointer; font-size: 11px; color: #8696a8; list-style: none; } .kw-raw summary::-webkit-details-marker { display: none; } .kw-raw div { font-size: 11px; color: #8696a8; overflow-wrap: anywhere; padding: 2px 0; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
+.bank-left { min-width: 0; overflow-wrap: anywhere; } .kw-cq { margin-bottom: 10px; } .kw-cq .in-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 6px; } .kw-mic-row { display: flex; gap: 6px; align-items: center; margin: 4px 0 2px; } .kw-mic-row .btn { min-height: 36px; padding: 4px 12px; font-size: var(--fs-s); } .kw-mic-row .btn.rec { background: #d93025; color: #fff; border-color: #d93025; } .kw-mic-row .small { overflow-wrap: anywhere; } .bal-sec > summary span::before { color: var(--muted) !important; font-size: inherit !important; width: 1em !important; } details.more > summary::-webkit-details-marker, .sub-tree summary::-webkit-details-marker { display: none; } details.more:not(.wiz-set) > summary::before, .sub-tree details > summary > :first-child::before { content: "▸"; color: var(--muted); display: inline-block; width: 1em; flex: none; } details.more[open]:not(.wiz-set) > summary::before, .sub-tree details[open] > summary > :first-child::before { content: "▾"; } details.more > summary { list-style: none; } .kw-slot-off { display: none !important; } .kw-raw { display: block; margin-top: 2px; } .kw-raw summary { display: inline; cursor: pointer; font-size: 11px; color: #8696a8; list-style: none; } .kw-raw summary::-webkit-details-marker { display: none; } .kw-raw div { font-size: 11px; color: #8696a8; overflow-wrap: anywhere; padding: 2px 0; } .bank-date { white-space: nowrap; margin-right: 7px; color: #566981; } .bank-desc { color: #66788b; }
 .bank-amt { text-align: right; white-space: nowrap; color: #435c71; font-weight: 500; }
 #incNone { margin: 14px 1px 0; padding: 9px 2px; min-height: 44px; font-size: var(--fs-m); font-weight: 700; text-decoration: none; }
 .incgo { padding-top: 17px; background: linear-gradient(transparent, var(--surface) 30%); } .incgo .btn { min-height: 61px; font-size: var(--fs-l); }
@@ -1297,7 +1297,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <details class="more wiz-set" id="wSet"><summary>Имя и ИИ-помощник</summary>
       <div class="card wiz-card">
         <label>Ваше имя<input id="wName" type="text" maxlength="40" autocomplete="given-name" placeholder="Как к вам обращаться?"></label>
-        <label class="aipick">ИИ-помощник<select id="wAI" aria-label="ИИ-помощник"><option value="auto">Авто</option><option value="off">Выключен</option></select></label>
+        <label class="aipick">ИИ-помощник<select id="wAI" aria-label="ИИ-помощник"><option value="auto">Авто</option><option value="off">Выключен</option></select><span id="wAIst" class="small" hidden>Не подключён · <button type="button" class="linkbtn" id="wAIcfg">Настроить</button></span></label>
         <p class="small muted">ИИ использует лимит вашего аккаунта.<br>Номера счетов и карт ему не передаются. Операции хранятся в вашем личном разделе; файлы выписок не сохраняются.</p>
       </div>
     </details>
@@ -1307,13 +1307,13 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
   <div class="onbhead" id="onbHead" role="region" aria-label="Первый запуск" hidden><span class="wiz-step" id="onbStep"></span><div class="steps" aria-hidden="true" id="onbSteps"><i></i><i></i><i></i></div></div>
   <section class="card onbproc" id="onbProc" hidden aria-labelledby="onbProcT">
     <h2 id="onbProcT">Разбираем выписку</h2>
-    <div class="stmt-card" aria-label="Сведения о загруженной выписке">
+    <div class="stmt-card" id="opStmtCard" aria-label="Сведения о загруженной выписке">
       <div class="stmt-label">Загруженная выписка</div>
       <div id="opStmts"></div>
       <div class="stmt-acc" id="opAcc" hidden><span id="opAccT"></span><button type="button" class="linkbtn" id="opAccEdit">Изменить</button></div>
     </div>
-    <div class="task-h">Определяем категории расходов</div>
-    <p class="task-x">Кошелёк распределяет платежи по статьям расходов. Первый ответ ИИ может занять до минуты.</p>
+    <div class="task-h" id="opTaskH">Определяем категории расходов</div>
+    <p class="task-x" id="opTaskX">Кошелёк распределяет платежи по статьям расходов. Первый ответ ИИ может занять до минуты.</p>
     <div class="op-spin" id="opSpin" role="status" hidden><i aria-hidden="true"></i><span id="opSpinT">Работаю, не закрывайте вкладку…</span></div>
     <div class="prog" id="opBarW" hidden><div class="pbar" id="opTrack" role="progressbar" aria-label="Ход разбора" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="pbar-in" id="opBar"></div></div><span class="num" id="opPct">0%</span></div>
     <p class="task-x" id="kwAiNote" role="status" hidden></p>
@@ -3537,7 +3537,7 @@ function previewImport(book, input, { fileName = 'statement.csv', format = 'auto
     recon = reconcileAll(sim);
   } catch (e) { if (!(e instanceof StatementError)) throw e; }
   const bad = recon.filter((r) => !r.ok && !r.unconfirmed);
-  if (bad.length) reasons.push({ code: 'reconcile', text: 'сверка после импорта не сходится: ' + bad.map((r) => `${r.period} (D ${pyFixedSigned(r.D_diff, 2)}, K ${pyFixedSigned(r.K_diff, 2)}, на начало ${pyFixedSigned(r.opening_diff, 2)})`).join('; ') });
+  if (bad.length) reasons.push({ code: 'reconcile', recon: bad, text: 'сверка после импорта не сходится: ' + bad.map((r) => `${r.period} (D ${pyFixedSigned(r.D_diff, 2)}, K ${pyFixedSigned(r.K_diff, 2)}, на начало ${pyFixedSigned(r.opening_diff, 2)})`).join('; ') });
   const newOps = fresh.map((o) => { const s = sim.journal.get(o.id); return { id: o.id, date: o.date, amount: o.amount, cp: o.cp, info: o.info, type: s ? s.type : null, group: s ? s.group : null, sub: s ? s.sub : null, status: s ? s.status : null }; });
   const status = reasons.length ? 'needs_confirmation' : 'verified';
   return Object.assign(base, {
@@ -6122,7 +6122,17 @@ function showWizard() {
     impStart(files);
   };
   $("wFile").addEventListener("change", onFiles);
+  wizAI();
 }
+/* П14.1: один статус ИИ — «Авто / Выключен» только когда помощник доступен, иначе «Не подключён» и переход к настройке */
+async function wizAI() {
+  if (!$("wAI")) return;
+  if (!S.sample) { try { S.sample = await use("sample"); } catch (e) { } }
+  const ok = !!S.sample;
+  $("wAI").hidden = !ok; $("wAIst").hidden = ok;
+}
+window.addEventListener("koshelek-ai", () => { setTimeout(() => { if (!$("wizard").hidden) wizAI(); }, 300); });
+document.addEventListener("click", ev => { const b = ev.target.closest("#wAIcfg"); if (b) { ev.preventDefault(); window.KOSHELEK?.openConn?.(); } });
 /* ===== П10.4 (1): первый запуск — одна последовательность, по одной задаче за раз.
    Шаг 1 «Выписка»: загрузка и разбор; ИИ — только два последних месяца выписки; дальше — сам.
    Шаг 2 «Источники дохода»: от кого зарплата («Продолжить»). Шаг 3 «Уточните операции» этих двух месяцев — по одной карточке
@@ -6170,15 +6180,29 @@ function onbProcDraw() {
   $("opBar").style.width = pct + "%"; $("opBar").classList.toggle("ind", run && !pct); $("opPct").textContent = run && !pct ? "…" : pct + "%"; $("opTrack").setAttribute("aria-valuenow", String(pct));
   $("opStop").hidden = !run;
   const sk = S.impSkipped || [], idle = !S.imp && !S.impQueue.length && !S.impDone.length;
-  $("opSkip").hidden = !sk.length; $("opSkip").textContent = sk.length ? "Не удалось прочитать: " + sk.map(x => `${x.name} (${x.why})`).join("; ") + ". Файл пропущен." : "";
+  const failed = !!sk.length && idle && !sts.length;   // П14.1: ни одной выписки не загружено — экран целиком про отказ
+  $("onbProc").classList.toggle("failed", failed);
+  $("onbProcT").textContent = failed ? "Файл не загружен" : "Разбираем выписку";
+  ["opStmtCard", "opTaskH", "opTaskX"].forEach(id => { $(id).hidden = failed; });
+  if (failed) { $("opBarW").hidden = true; $("opStop").hidden = true; $("opSpin").hidden = true; }
+  $("opTaskX").textContent = aiNoteText();
+  $("opSkip").hidden = !sk.length;
+  $("opSkip").innerHTML = sk.length ? (failed ? sk.map(x => `<b>${esc(x.name)}</b>: ${esc(x.why)}.${x.todo ? `<br>${esc(x.todo)}` : ""}`).join("<br>") : "Не удалось прочитать: " + sk.map(x => `${esc(x.name)} (${esc(x.why)})`).join("; ") + ". Файл пропущен.") : "";
   $("opRetryL").hidden = !(sk.length && idle);
+}
+/* П14.1: что сказать про ИИ — по фактическому режиму */
+function aiNoteText() {
+  const p = profile();
+  if (aiTier() === "off" || p?.consent?.claude_classify === false) return "ИИ выключен. Кошелёк распределяет платежи по статьям расходов по правилам, остальное спросит у вас.";
+  if (!S.sample) return "ИИ не подключён. Кошелёк распределяет платежи по правилам, остальное спросит у вас. Подключить ИИ можно в «Настройках → Подключения».";
+  return "Кошелёк распределяет платежи по статьям расходов. Первый ответ ИИ может занять до минуты.";
 }
 let opT0 = 0;
 setInterval(() => {
   const el = $("onbProc"), sp = $("opSpin"); if (!el || !sp) return;
   if (el.hidden) { opT0 = 0; sp.hidden = true; return; }
   if (!opT0) opT0 = Date.now();
-  sp.hidden = !(Date.now() - opT0 > 5000) || !$("opBarW").hidden;
+  sp.hidden = el.classList.contains("failed") || !(Date.now() - opT0 > 5000) || !$("opBarW").hidden;
 }, 700);
 $("opRetry").addEventListener("change", () => { const fs = [...($("opRetry").files || [])].filter(f => /\.(csv|xls|xlsx)$/i.test(f.name)); $("opRetry").value = ""; if (!fs.length) return; S.impSkipped = []; onbProcDraw(); impStart(fs); });
 $("opAccEdit").addEventListener("click", () => { logEv("click", "accEdit:02"); accOpen(); });
@@ -9591,6 +9615,43 @@ async function impLearn(opts = {}) {
   imp.working = false; draw("imp");
   if (imp.batch && onbStep() === 1) await wizStall();
 }
+/* П14.1: сообщение проверки файла «сам с собой» — по-человечески, с суммами; не распознали — показываем как есть */
+function humanProblem(m) {
+  const x = /операции D (-?[\d.]+) \/ K (-?[\d.]+), строки оборота D (-?[\d.]+) \/ K (-?[\d.]+), остаток (-?[\d.]+) → (-?[\d.]+)/.exec(m);
+  if (x) {
+    const [oD, oK, tD, tK, o, c] = x.slice(1).map(Number), bits = [];
+    if (Math.abs(oD - tD) > 0.005) bits.push(`списания по операциям ${eur(oD)} €, по обороту банка ${eur(tD)} €`);
+    if (Math.abs(oK - tK) > 0.005) bits.push(`поступления по операциям ${eur(oK)} €, по обороту банка ${eur(tK)} €`);
+    const calc = Math.round((o + oK - oD) * 100) / 100;
+    if (Math.abs(calc - c) > 0.005) bits.push(`остаток на конец ${eur(c)} €, а по операциям выходит ${eur(calc)} €`);
+    if (bits.length) return "не сошлась сверка с банком: " + bits.join("; ");
+  }
+  return "файл не прошёл проверку: " + m.replace(/^файл не прошёл проверку: /, "").replace(/\.$/, "");
+}
+/* П14.1: причина отказа и что делать дальше — по фактическим данным проверки, без домыслов */
+function skipWhy(imp) {
+  const NEXT = "Выгрузите выписку заново из интернет-банка за полный период, с остатками на начало и конец, и выберите файл ещё раз.";
+  const rs = imp.stage === "preview" ? (imp.preview?.reasons || []) : [];
+  const rc = rs.find(r => r.code === "reconcile"), nb = rs.find(r => r.code === "no_balances");
+  if (rc) {
+    const bits = [];
+    for (const r of rc.recon || []) {
+      const per = fmtPeriod(r.period);
+      if (r.file_ok === false) bits.push(`${per}: обороты и остатки внутри файла не согласованы`);
+      if (Math.abs(r.D_diff) > 0.005) bits.push(`${per}: списания расходятся с оборотом банка на ${eur(Math.abs(r.D_diff))} €`);
+      if (Math.abs(r.K_diff) > 0.005) bits.push(`${per}: поступления расходятся с оборотом банка на ${eur(Math.abs(r.K_diff))} €`);
+      if (r.opening_diff != null && Math.abs(r.opening_diff) > 0.005) bits.push(`${per}: остаток на начало расходится на ${eur(Math.abs(r.opening_diff))} €`);
+      if (r.closing_diff != null && Math.abs(r.closing_diff) > 0.005 && r.file_ok !== false) bits.push(`${per}: остаток на конец расходится на ${eur(Math.abs(r.closing_diff))} €`);
+    }
+    return { why: "не сошлась сверка с банком" + (bits.length ? " (" + bits.slice(0, 3).join("; ") + ")" : ""), todo: NEXT };
+  }
+  if (nb) return { why: "в файле нет остатков, сверку с банком провести нельзя", todo: NEXT };
+  if (imp.stage === "preview") return { why: "файл не прошёл проверку: " + (rs[0]?.text || "причина не определена"), todo: NEXT };
+  const lm = imp.learn?.message;
+  if (imp.stage === "rejected" && lm) return { why: humanProblem(String(lm)), todo: NEXT };
+  if (imp.stage === "error" && imp.error) return { why: "файл не прочитан: " + String(imp.error).replace(/\.$/, ""), todo: NEXT };
+  return { why: "формат не удалось определить", todo: "Выберите CSV или Excel (.xls, .xlsx), выгруженный из интернет-банка без правок." };
+}
 /* первый запуск: файл не должен вешать шаг 1. Формат-кандидат с пройденной проверкой принимаем сам (как «Запомнить формат»);
    всё, что не разобралось, — пропускаем с понятным сообщением и идём к следующему файлу */
 async function wizStall() {
@@ -9605,7 +9666,7 @@ async function wizStall() {
     }
   }
   if (imp.stage === "done" || imp.stage === "reading" || imp.stage === "learn") return;
-  (S.impSkipped = S.impSkipped || []).push({ name: imp.name, why: imp.stage === "preview" ? "не сошлась сверка с банком" : "формат не удалось определить" });
+  (S.impSkipped = S.impSkipped || []).push(Object.assign({ name: imp.name }, skipWhy(imp)));
   logEv("wiz", "skip:" + imp.stage);
   imp.stage = "skipped"; impNext(); onbProcDraw();
 }

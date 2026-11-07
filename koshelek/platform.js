@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П13.14 · 07.11.2026";
+const BUILD = "П14.2 · 07.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
@@ -376,13 +376,16 @@ function renderBar() {
     bar.replaceChildren(el("span", null, Sync.conflict.kind === "newer" ? "На Диске есть более новые данные." : "Данные изменены на двух устройствах."), el("button", { type: "button", onclick: () => openConn() }, "Решить"));
   } else if (bar) { bar.remove(); bar = null; }
 }
+/* П14.2: формулировки по устройству */
+const IS_PHONE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+const DEV = IS_PHONE ? { on: "на этом телефоне", lost: "потере или замене телефона", fresh: "на новом телефоне" } : { on: "на этом компьютере", lost: "потере или замене компьютера", fresh: "на новом устройстве" };
 let warn = null;
 /* П13 (A0.2): данные только на телефоне, Диск не подключён — тихая плашка (скрывается на 7 дней кнопкой «Позже») */
 function renderWarn() {
   const show = !!document.body && !Sync.consented() && !gateMode && docCount() > 0 && !(+ls.get(lk("kw_nodrv_until")) > Date.now());
   if (!show) { if (warn) { warn.remove(); warn = null; } return; }
   if (warn) return;
-  warn = el("div", { id: "kwWarn" }, el("span", null, persisted ? "Данные только на этом телефоне. Подключите Диск: копия спасёт при потере или замене телефона." : "Данные только на этом телефоне, браузер может стереть их при нехватке памяти. Подключите Диск."),
+  warn = el("div", { id: "kwWarn" }, el("span", null, persisted ? "Данные только " + DEV.on + ". Подключите Диск: копия спасёт при " + DEV.lost + "." : "Данные только " + DEV.on + ", браузер может стереть их при нехватке памяти. Подключите Диск."),
     el("span", { style: "display:flex;gap:6px" }, el("button", { type: "button", onclick: () => openConn() }, "Подключить"), el("button", { type: "button", onclick: () => { ls.set(lk("kw_nodrv_until"), String(Date.now() + 7 * 864e5)); renderWarn(); } }, "Позже")));
   document.body.append(warn);
 }
@@ -399,7 +402,7 @@ function renderConn() {
     const inp = el("input", { type: "text", placeholder: "Client ID Google (…apps.googleusercontent.com)", id: "kwCid" });
     stGoogle.push(el("div", { class: "m bad" }, "Не задан Client ID приложения Google. Вставьте его (его даёт владелец приложения)."), inp, el("button", { class: "btn", type: "button", onclick: () => { const v = inp.value.trim(); if (/\.apps\.googleusercontent\.com$/.test(v)) { ls.set("cid", v); gMsg = ""; renderConn(); } else { gMsg = "Это не похоже на Client ID."; renderConn(); } } }, "Запомнить"));
   } else if (!g) {
-    stGoogle.push(el("div", { class: "m" }, "Данные хранятся в этом телефоне. Вход Google включает копию в скрытой папке приложения на вашем Диске: она не видна в файлах Диска и нужна, чтобы вернуть данные на новом телефоне. Приложение видит только эту папку."),
+    stGoogle.push(el("div", { class: "m" }, "Данные хранятся " + DEV.on + ". Вход Google добавляет копию в скрытую папку приложения на вашем Диске: так данные можно вернуть " + DEV.fresh + ". Приложение видит только эту папку."),
       el("button", { class: "btn primary", type: "button", onclick: googleLogin }, "Войти через Google"));
   } else {
     stGoogle.push(el("div", { class: "m" + (["error", "login", "conflict"].includes(Sync.state) ? " bad" : "") }, (STATE_LABEL[Sync.state] || "") + (Sync.msg && Sync.msg !== STATE_LABEL[Sync.state] ? ": " + Sync.msg : "") + (kv.lastSync ? " · последняя: " + new Date(kv.lastSync).toLocaleString("ru-RU") : "")),
@@ -410,10 +413,10 @@ function renderConn() {
   if (g && kv.lastMerge) stGoogle.push(el("div", { class: "m", id: "kwMerge" }, "Последнее слияние: " + new Date(kv.lastMerge.at).toLocaleString("ru-RU") + " · с устройством …" + kv.lastMerge.dev + " · " + (kv.lastMerge.n ? "обновлено документов: " + kv.lastMerge.n : "без изменений")));   // П13.4 (D4)
   if (gMsg) stGoogle.push(el("div", { class: "m bad" }, gMsg));
   if (Sync.conflict) stGoogle.push(el("div", { class: "st" }, el("div", { class: "m" }, "На Диске копия от " + new Date(Sync.conflict.data.savedAt || Date.now()).toLocaleString("ru-RU") + ". Выберите, какие данные оставить — вторые будут заменены."),
-    el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с этого телефона"))));
-  const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён на этом телефоне" : "Ключ Gemini (AIza…)", autocomplete: "off" });
+    el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с " + (IS_PHONE ? "этого телефона" : "этого компьютера")))));
+  const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён " + DEV.on : "Ключ Gemini (AIza…)", autocomplete: "off" });
   const stForm = [
-    el("div", { class: "m" }, "ИИ раскладывает траты по категориям. Нужен личный бесплатный ключ Google AI Studio. Ключ хранится только на этом телефоне и никуда не синхронизируется."),
+    el("div", { class: "m" }, "ИИ раскладывает траты по категориям. Нужен личный бесплатный ключ Google AI Studio. Ключ хранится только " + DEV.on + " и никуда не синхронизируется."),
     el("ol", { class: "m", style: "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px" },
       el("li", null, el("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "Откройте страницу ключа"), " и войдите тем же аккаунтом Google."),
       el("li", null, "Нажмите «Create API key» и выберите проект (или создайте новый)."),
@@ -425,15 +428,16 @@ function renderConn() {
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", disabled: aiBusy, onclick: async () => { const v = key.value.trim(); if (!v && !hasKey) { aiMsg = "Вставьте ключ."; renderConn(); return; } await aiCheck(v); } }, aiBusy ? "Проверяю…" : hasKey && !key.value ? "Проверить ключ" : "Сохранить и проверить"),
       hasKey ? el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("geminiKey", ""); ls.del(lk("gk")); aiMsg = "Ключ удалён."; window.dispatchEvent(new Event("koshelek-ai")); renderConn(); } }, "Удалить ключ") : null),
   ];
-  const stAi = hasKey ? [el("div", { class: "m" }, "Ключ сохранён на этом телефоне. ИИ раскладывает траты по категориям."), el("details", null, el("summary", null, "Изменить или удалить ключ"), el("div", { style: "display:flex;flex-direction:column;gap:8px;margin-top:8px" }, stForm))] : stForm;
+  const stAi = hasKey ? [el("div", { class: "m" }, "Ключ сохранён " + DEV.on + ". ИИ раскладывает траты по категориям."), el("details", null, el("summary", null, "Изменить или удалить ключ"), el("div", { style: "display:flex;flex-direction:column;gap:8px;margin-top:8px" }, stForm))] : stForm;
   if (aiMsg) stAi.push(el("div", { class: "m" + (/^✓/.test(aiMsg) ? "" : " bad") }, aiMsg));
   const adv = el("details", null, el("summary", null, "Дополнительно"), el("div", { class: "m" }, "Модель Gemini: "), el("input", { type: "text", value: AI.model(), onchange: ev => { const v = ev.target.value.trim(); if (v) { kvSet("model", v); ls.set(lk("gm"), v); } } }), el("div", { class: "m" }, "Запасная модель (если основная отвечает 503): "), el("input", { type: "text", value: AI.fallback() || CFG.fallbackModel, onchange: ev => { const v = ev.target.value.trim(); kvSet("model2", v); ls.set(lk("gm2"), v); } }));
   const inst = standalone();
   const body = [
     el("h2", null, gateMode ? "Настроим «Кошелёк»" + (PROF.list.length > 1 ? " · " + curProf().name : "") : "Подключения"),
-    stepBox(1, "Установка на главный экран", inst ? true : "bad", inst ? "готово" : "нужно", inst ? el("div", { class: "m" }, "Приложение запущено как установленное.") : el("div", { class: "m" }, "Меню Chrome ⋮ → «Добавить на главный экран» → «Установить». Дальше открывайте «Кошелёк» с главного экрана: так он работает надёжнее. Защищает от потери копия на Диске (шаг 2).")),
+    gateMode ? el("div", { class: "m" }, "Эти шаги необязательны и не нужны для загрузки выписки: можно нажать «Пропустить» внизу и вернуться к ним позже.") : null,
+    stepBox(1, IS_PHONE ? "Установка на главный экран" : "Установка как приложения", inst ? true : IS_PHONE ? "bad" : false, inst ? "готово" : IS_PHONE ? "нужно" : "по желанию", inst ? el("div", { class: "m" }, "Приложение запущено как установленное.") : IS_PHONE ? el("div", { class: "m" }, "Меню Chrome ⋮ → «Добавить на главный экран» → «Установить». Дальше открывайте «Кошелёк» с главного экрана: так он работает надёжнее.") : el("div", { class: "m" }, "Не обязательно. Chrome или Edge: значок установки в адресной строке или меню ⋮ → «Установить Кошелёк». Данные защищает копия на Диске (шаг 2).")),
     stepBox(2, "Вход Google и копия на Диске", g, g ? "подключено" : "не подключено", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stGoogle)),
-    stepBox(3, "ИИ-помощник (Gemini)", hasKey, hasKey ? "ключ есть" : "не задан", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stAi, adv)),
+    stepBox(3, "ИИ-помощник (Gemini)", hasKey, hasKey ? "подключён" : "не подключён", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stAi, adv)),
   ];
   if (gateMode) body.push(el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => finishGate() }, g || hasKey ? "Продолжить" : "Пропустить, настрою позже")), el("div", { class: "m" }, "Все шаги можно пройти позже: «Настройки» → «Подключения» или значок в правом верхнем углу."));
   else body.push(el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => dlg.close() }, "Закрыть")));
@@ -473,7 +477,7 @@ async function googleLogin() {
 }
 let dlgMode = "conn", usr = { edit: null, del: null, msg: "" };
 function ensureDlg() { mountUI(); if (!dlg) { dlg = el("dialog", { id: "kwDlg" }); document.body.append(dlg); dlg.addEventListener("close", () => { if (gateMode && !gateRes) return; }); dlg.addEventListener("cancel", ev => { if (gateMode) ev.preventDefault(); }); } }
-function openConn() { ensureDlg(); dlgMode = "conn"; renderConn(); if (!dlg.open) dlg.showModal(); }
+function openConn() { ensureDlg(); dlgMode = "conn"; if (!dlg.open) { aiMsg = ""; gMsg = ""; } renderConn(); if (!dlg.open) dlg.showModal(); }
 function openUsers() { ensureDlg(); dlgMode = "users"; usr = { edit: null, del: null, msg: "" }; renderUsers(); if (!dlg.open) dlg.showModal(); }
 async function flushSync() { try { if (Sync.consented() && kv.dirty && !Sync.conflict) await Promise.race([Sync.run(true), sleep(5000)]); } catch (e) { } }
 async function switchTo(id) { usr.msg = "Переключаю…"; renderUsers(); await flushSync(); PROF.act = id; saveProf(); location.reload(); }
@@ -487,7 +491,7 @@ function delProf(id) {
   try { indexedDB.deleteDatabase("koshelek-w" + (id === "p1" ? "" : "-" + id)); } catch (e) { }
   for (const k of ["gk", "gm", "gm2"]) ls.del(id === "p1" ? k : k + ":" + id);
   try { for (let i2 = localStorage.length - 1; i2 >= 0; i2--) { const k = localStorage.key(i2); if (k && k.startsWith("u:" + id + ":")) _ld.call(localStorage, k); } } catch (e) { }
-  usr.del = null; usr.msg = "Пользователь удалён с этого телефона. Копия на Диске осталась."; renderUsers();
+  usr.del = null; usr.msg = "Пользователь удалён с " + (IS_PHONE ? "этого телефона" : "этого компьютера") + ". Копия на Диске осталась."; renderUsers();
 }
 function renderUsers() {
   if (!dlg) return;
@@ -517,7 +521,7 @@ function renderUsers() {
     el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => dlg.close() }, "Закрыть"))));
 }
 document.addEventListener("click", ev => { if (ev.target.closest("#kwUser")) openUsers(); });
-function finishGate() { gateMode = false; kvSet("setupDone", true); dlg.close(); gateRes?.(); gateRes = null; }
+function finishGate() { if (!Sync.consented()) ls.set(lk("kw_nodrv_until"), String(Date.now() + 7 * 864e5)); gateMode = false; kvSet("setupDone", true); dlg.close(); gateRes?.(); gateRes = null; }
 function gate() {
   if (kv.setupDone || docCount()) return Promise.resolve();
   return new Promise(res => { gateRes = res; gateMode = true; const go = () => { mountUI(); openConn(); }; if (document.body) go(); else addEventListener("DOMContentLoaded", go); });
