@@ -20,7 +20,9 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П13.4 · 07.11.2026";
+const BUILD = "П13.5 · 07.11.2026";
+let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
+const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
 const _pre = [];
 /* события платформы — в журнал аппа (logEv); пока апп не загрузился — копятся */
@@ -149,8 +151,8 @@ const Sync = {
   state: "off", msg: "", timer: null, busy: false, conflict: null, lastCheck: 0, onState: null,
   set(state, msg) { this.state = state; this.msg = msg || ""; if (state !== this._ls) { this._ls = state; plog("sync", state + (msg ? " · " + msg : "")); } this.onState?.(); },
   consented() { return kv.consented === true && !!Auth.cid(); },
-  touch(fromOtherTab) { if (!fromOtherTab && kv.dirty !== true) { kvSet("dirty", true); } if (!this.consented()) { this.set(kv.consented ? "error" : "off", kv.consented ? "Нет Client ID" : "Не подключён"); return; } if (this.state !== "conflict") this.set("pending", "Ждёт отправки"); clearTimeout(this.timer); this.timer = setTimeout(() => this.run().catch(() => { }), CFG.syncDelayMs); },
-  snapshot(rev) { const docs = {}; for (const [k, v] of mem) if (!isLog(k)) docs[k] = v; return JSON.stringify({ v: 1, rev, device: kv.device, savedAt: new Date().toISOString(), docs }); },
+  touch(fromOtherTab) { editSeq++; if (!fromOtherTab && kv.dirty !== true) { kvSet("dirty", true); } if (!this.consented()) { this.set(kv.consented ? "error" : "off", kv.consented ? "Нет Client ID" : "Не подключён"); return; } if (this.state !== "conflict") this.set("pending", "Ждёт отправки"); clearTimeout(this.timer); this.timer = setTimeout(() => this.run().catch(() => { }), CFG.syncDelayMs); },
+  snapshot(rev) { const docs = {}, sh = {}; for (const [k, v] of mem) if (!isLog(k)) { docs[k] = v; sh[k] = hsh(v); } this._sh = sh; return JSON.stringify({ v: 1, rev, device: kv.device, savedAt: new Date().toISOString(), docs }); },
   async remote() {   // лучшая корректная копия на Диске
     const files = (await drive.list()).filter(f => SLOTS.includes(f.name)).sort((a, b) => (+b.appProperties?.rev || 0) - (+a.appProperties?.rev || 0));
     return files;
@@ -160,7 +162,7 @@ const Sync = {
     const docs = Object.assign({}, data.docs); for (const [k, v] of mem) if (isLog(k)) docs[k] = v;   // П13: журнал этого устройства не затирается копией с Диска
     await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of Object.entries(docs)) st.put(v, k); });
     mem.clear(); for (const [k, v] of Object.entries(docs)) mem.set(k, v);
-    await kvSet("baseRev", +data.rev || 0); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
+    await kvSet("baseRev", +data.rev || 0); await kvSet("baseHash", Object.fromEntries(Object.entries(data.docs).filter(([k]) => !isLog(k)).map(([k, v]) => [k, hsh(v)]))); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
     bc?.postMessage({ t: "reload", from: TAB });
   },
   /* проверка Диска: подтянуть новое, если у нас нет несохранённых правок; иначе — конфликт */
@@ -202,11 +204,13 @@ const Sync = {
         let data = null; for (const f of files) { try { data = await this.load(f); break; } catch (e) { } }
         if (data) { this.busy = false; await this.merge(data); return; }
       }
-      const rev = Math.max(R, +kv.baseRev || 0) + 1, bytes = await gzip(this.snapshot(rev));
+      const seq0 = editSeq, rev = Math.max(R, +kv.baseRev || 0) + 1, snapStr = this.snapshot(rev), sh = this._sh, bytes = await gzip(snapStr);
       const slot = SLOTS.map(n => files.find(f => f.name === n) || { name: n, rev: -1 }).sort((a, b) => (+a.appProperties?.rev || a.rev || 0) - (+b.appProperties?.rev || b.rev || 0))[0];
       await drive.upload(slot.id || null, slot.name, bytes, { rev: String(rev), device: kv.device, savedAt: new Date().toISOString(), docs: String(docCount()) });
-      await kvSet("baseRev", rev); await kvSet("dirty", false); await kvSet("lastSync", Date.now());
-      this.set("ok", "Синхронизировано");
+      await kvSet("baseRev", rev); await kvSet("baseHash", sh); await kvSet("lastSync", Date.now());
+      const moved = editSeq !== seq0; await kvSet("dirty", moved);   // П13.5: пока шла отправка, данные менялись — остаётся «ждёт отправки», уйдёт следующая копия
+      if (moved) { this.set("pending", "Ждёт отправки"); clearTimeout(this.timer); this.timer = setTimeout(() => this.run().catch(() => { }), CFG.syncDelayMs); }
+      else this.set("ok", "Синхронизировано");
     } catch (e) { this.fail(e); } finally { this.busy = false; }
   },
   /* П12.12: расхождение правок — без вопросов: документы сливаются (по ключам, свои правки в приоритете), результат уходит на Диск; старые копии остаются в слотах */
@@ -226,11 +230,17 @@ const Sync = {
         return l;
       };
       const own = data.device === kv.device, out = new Map(mem); let changed = false, nCh = 0;
-      if (!own) for (const [k, rv] of Object.entries(data.docs)) {
-        if (isLog(k)) continue;
-        if (!mem.has(k)) { out.set(k, rv); changed = true; nCh++; continue; }
-        const lv = mem.get(k); if (JSON.stringify(lv) === JSON.stringify(rv)) continue;
-        const nv = mv(lv, rv, 0); if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; nCh++; }
+      const bh = kv.baseHash && typeof kv.baseHash === "object" ? kv.baseHash : null;   // П13.5: отпечатки на момент последней синхронизации — трёхстороннее слияние
+      if (!own) {
+        for (const [k, rv] of Object.entries(data.docs)) {
+          if (isLog(k)) continue;
+          const B = bh ? bh[k] : undefined;
+          if (!mem.has(k)) { if (B !== undefined && hsh(rv) === B) continue; out.set(k, rv); changed = true; nCh++; continue; }   // здесь удалено, там не менялось — остаётся удалённым
+          const lv = mem.get(k), hl = hsh(lv), hr = hsh(rv); if (hl === hr) continue;
+          let nv; if (B !== undefined && hl === B) nv = rv; else if (B !== undefined && hr === B) continue; else nv = mv(lv, rv, 0);   // менялось только там — берём; только здесь — оставляем; с обеих сторон — как раньше
+          if (JSON.stringify(nv) !== JSON.stringify(lv)) { out.set(k, nv); changed = true; nCh++; }
+        }
+        if (bh) for (const k of [...mem.keys()]) { if (isLog(k) || k in data.docs) continue; if (bh[k] !== undefined && hsh(mem.get(k)) === bh[k]) { out.delete(k); changed = true; nCh++; } }   // удалено там, здесь не менялось — удаляем
       }
       plog("sync", "слияние: Диск rev " + data.rev + (own ? " (это же устройство)" : " (другое устройство)") + (changed ? " · добавлено с Диска" : " · без добавлений"));
       if (changed) { await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of out) st.put(v, k); }); mem.clear(); for (const [k, v] of out) mem.set(k, v); }
@@ -397,7 +407,7 @@ function renderConn() {
         el("button", { class: "btn", type: "button", onclick: async () => { if (Sync.state === "login") { try { await Auth.get("consent"); } catch (e) { } } kvSet("dirty", true); Sync.conflict ? null : Sync.run(); } }, "Синхронизировать сейчас"),
         el("button", { class: "btn", type: "button", onclick: async () => { await kvSet("consented", false); Auth.token = null; Sync.set("off", ""); renderConn(); } }, "Отключить"))));
   }
-  if (g && kv.lastMerge) stGoogle.push(el("div", { class: "m", id: "kwMerge" }, "Последнее слияние: " + new Date(kv.lastMerge.at).toLocaleString("ru-RU") + " · с устройством …" + kv.lastMerge.dev + " · " + (kv.lastMerge.n ? "добавлено документов: " + kv.lastMerge.n : "без добавлений")));   // П13.4 (D4)
+  if (g && kv.lastMerge) stGoogle.push(el("div", { class: "m", id: "kwMerge" }, "Последнее слияние: " + new Date(kv.lastMerge.at).toLocaleString("ru-RU") + " · с устройством …" + kv.lastMerge.dev + " · " + (kv.lastMerge.n ? "обновлено документов: " + kv.lastMerge.n : "без изменений")));   // П13.4 (D4)
   if (gMsg) stGoogle.push(el("div", { class: "m bad" }, gMsg));
   if (Sync.conflict) stGoogle.push(el("div", { class: "st" }, el("div", { class: "m" }, "На Диске копия от " + new Date(Sync.conflict.data.savedAt || Date.now()).toLocaleString("ru-RU") + ". Выберите, какие данные оставить — вторые будут заменены."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с этого телефона"))));
@@ -421,7 +431,7 @@ function renderConn() {
   const inst = standalone();
   const body = [
     el("h2", null, gateMode ? "Настроим «Кошелёк»" + (PROF.list.length > 1 ? " · " + curProf().name : "") : "Подключения"),
-    stepBox(1, "Установка на главный экран", inst ? true : "bad", inst ? "готово" : "нужно", inst ? el("div", { class: "m" }, "Приложение запущено как установленное.") : el("div", { class: "m" }, "Меню Chrome ⋮ → «Добавить на главный экран» → «Установить». Дальше открывайте «Кошелёк» с главного экрана: так данные браузер не удаляет.")),
+    stepBox(1, "Установка на главный экран", inst ? true : "bad", inst ? "готово" : "нужно", inst ? el("div", { class: "m" }, "Приложение запущено как установленное.") : el("div", { class: "m" }, "Меню Chrome ⋮ → «Добавить на главный экран» → «Установить». Дальше открывайте «Кошелёк» с главного экрана: так он работает надёжнее. Защищает от потери копия на Диске (шаг 2).")),
     stepBox(2, "Вход Google и копия на Диске", g, g ? "подключено" : "не подключено", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stGoogle)),
     stepBox(3, "ИИ-помощник (Gemini)", hasKey, hasKey ? "ключ есть" : "не задан", el("div", { style: "display:flex;flex-direction:column;gap:8px" }, stAi, adv)),
   ];
@@ -546,5 +556,5 @@ const use = async name => {
 window.claude = Object.freeze({ use });
 /* имя пользователя латиницей (Алина → alina): не источник дохода — переводы «от себя» */
 window.KW_NOINC = () => { try { const n = String((curProf() || {}).name || "").trim().toLowerCase(); if (!n) return []; const M = {а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"j",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sh",ы:"i",э:"e",ю:"ju",я:"ja",ь:"",ъ:""}; const l = [...n].map(c => M[c] != null ? M[c] : c).join(""); return [...new Set([n, l])].filter(x => x.length >= 3); } catch (e) { return []; } };
-window.KOSHELEK = { openConn, openUsers, profile: curProf, Sync, AI, mem, kv, db, build: BUILD };
+window.KOSHELEK = { _hsh: hsh, openConn, openUsers, profile: curProf, Sync, AI, mem, kv, db, build: BUILD };
 })();
