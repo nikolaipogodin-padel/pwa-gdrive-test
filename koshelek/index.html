@@ -6958,10 +6958,6 @@ function homeCats(f, k) {
     const fb = (S.months[f.month]?.ops || []).filter(isFb), fs = -fb.reduce((a, o) => a + o.a, 0);
     if (fb.length) $("hCats").insertAdjacentHTML("afterbegin", `<li class="cat undef" data-big="fb"><button class="cat-btn" type="button" data-unver="fb" aria-label="${esc(`Запасная категория без проверки: ${pl(fb.length, "списание", "списания", "списаний")} на ${eur(fs)} €, в расходы входят`)}"><span class="cat-name">Запасная категория · проверить</span><span class="cat-val">${E0(fs)}<small>${fb.length} опер.</small></span></button></li>`);
   }
-  { // П13.14: честный показатель — разложено ИИ без вашей проверки (в расходы входят); «Не определено» остаётся первой строкой
-    const ai = (S.months[f.month]?.ops || []).filter(o => o.a < 0 && isAuto(o)), as = -ai.reduce((a, o) => a + o.a, 0);
-    if (ai.length) $("hCats").insertAdjacentHTML("afterbegin", `<li class="cat undef" data-big="auto"><button class="cat-btn" type="button" data-unver="1" aria-label="${esc(`Разложено ИИ без проверки: ${pl(ai.length, "списание", "списания", "списаний")} на ${eur(as)} €, в расходы входят`)}"><span class="cat-name">Разложил ИИ · проверить</span><span class="cat-val">${E0(as)}<small>${ai.length} опер.</small></span></button></li>`);
-  }
   if (un.length) {
     const li = `<li class="cat undef" data-big="❓"><button class="cat-btn" type="button" data-undef="1" aria-label="${esc(`Не определено: ${pl(un.length, "списание", "списания", "списаний")} на ${eur(us)} €, в расходы не входят`)}"><span class="cat-name">Не определено · уточнить</span><span class="cat-val">${E0(us)}<small>${un.length} опер.</small></span></button></li>`;
     $("hCats").insertAdjacentHTML("afterbegin", li);   // П11.6.2: «Не определено» — первой строкой
