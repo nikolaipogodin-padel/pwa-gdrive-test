@@ -9614,8 +9614,16 @@ function loadXlsx() {
   if (!xlsxLoad) xlsxLoad = new Promise((res, rej) => { const s = document.createElement("script"); s.src = XLSX_URL; const to = setTimeout(() => { xlsxLoad = null; rej(new Error("не загрузилась библиотека для Excel за 25 секунд — проверьте интернет или загрузите файл в формате CSV")); }, 25000); s.onload = () => { clearTimeout(to); res(window.XLSX); }; s.onerror = () => { xlsxLoad = null; rej(new Error("не загрузилась библиотека для чтения Excel — сохраните выписку как CSV")); }; document.head.appendChild(s); });
   return xlsxLoad;
 }
+/* П14.11: файл из почты/мессенджера/облака на Android может не отдавать содержимое и «висеть» без ошибки — ждём не дольше 20 секунд и говорим, что делать */
+const FILE_UNREADABLE = "телефон не отдаёт содержимое файла (так бывает с файлами из почты, мессенджера или облака, которые ещё не скачаны). Сохраните файл в «Загрузки» на телефоне и выберите его оттуда";
+function readFileBytes(file) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error(FILE_UNREADABLE)), 20000);
+    file.arrayBuffer().then(b => { clearTimeout(t); res(new Uint8Array(b)); }, () => { clearTimeout(t); rej(new Error(FILE_UNREADABLE)); });
+  });
+}
 async function readStatement(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = await readFileBytes(file);
   const kind = W.sniffContainer(bytes).kind;
   if (["xlsx", "xls", "ods"].includes(kind)) {
     const X = await loadXlsx();
@@ -9675,7 +9683,7 @@ async function impPick(file, batch = false) {
     await impLearn();
     if (S.imp !== imp) return;
     await impAuto();
-  } catch (e) { if (S.imp !== imp) return; imp.stage = "error"; imp.error = e?.message || String(e); draw("imp"); }
+  } catch (e) { if (S.imp !== imp) return; imp.stage = "error"; imp.error = e?.message || String(e); draw("imp"); if (imp.batch && onbStep() === 1) await wizStall(); }   // П14.11: ошибка чтения файла в мастере раньше не показывалась — экран оставался «Читаю файл…»
 }
 async function impLearn(opts = {}) {
   const imp = S.imp; if (!imp) return;
