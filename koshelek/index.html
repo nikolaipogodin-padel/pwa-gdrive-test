@@ -425,6 +425,11 @@ dialog::backdrop { background: rgb(10 20 26 / .45); }
 .hist .t-end { fill: var(--ink); font-weight: 600; }
 .hist .avg { stroke: var(--tick); stroke-width: 1.2; stroke-dasharray: 4 3; }
 .hist .zero { stroke: var(--muted); stroke-width: 1; }
+.hist .hit { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.hist .hf.sel { fill: var(--accent); }
+.hist .hx.sel { stroke: var(--accent); stroke-width: 2; }
+.hist .hsel { margin: 4px 0 0; font-size: var(--fs-s); color: var(--muted); min-height: 1.6em; }
+.hist .hsel b { color: var(--ink); font-weight: 600; }
 .cat-det .ops { box-shadow: none; border: 1px solid var(--line); }
 .op.cmp { grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 0 10px; padding: 9px 10px; }
 .op.cmp .d { color: var(--muted); font-size: var(--fs-s); }
@@ -6552,7 +6557,7 @@ function histSvg(r, f, Wd, uid) {
   const all = [...v.slice(0, cur).map(fin), curTop, fin(r.avg_month), 0];
   const mn = Math.min(...all), mx = Math.max(...all, 1);
   const Y = x => T + ph * (1 - (fin(x) - mn) / ((mx - mn) || 1)), y0 = Y(0), cw = pw / n, bw = Math.min(28, cw * 0.62);
-  const bar = (i, a, b, cls, tip) => { const x = Lh + cw * i + (cw - bw) / 2, ya = Y(a), yb = Y(b); return `<rect class="${cls}" ${cls === "hx" ? `style="fill:url(#${uid})"` : ""} x="${x.toFixed(1)}" y="${Math.min(ya, yb).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(ya - yb)).toFixed(1)}" rx="1.5"><title>${esc(tip)}</title></rect>`; };
+  const bar = (i, a, b, cls, tip) => { const x = Lh + cw * i + (cw - bw) / 2, ya = Y(a), yb = Y(b); return `<rect class="${cls}" data-i="${i}" ${cls === "hx" ? `style="fill:url(#${uid})"` : ""} x="${x.toFixed(1)}" y="${Math.min(ya, yb).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(ya - yb)).toFixed(1)}" rx="1.5"><title>${esc(tip)}</title></rect>`; };
   let g = `<defs><pattern id="${uid}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="pat" width="2" height="4"/></pattern></defs>`;
   if (mn < 0) g += `<line class="zero" x1="${Lh}" x2="${Wd - R}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}"/>`;
   for (let i = 0; i < cur; i++) g += bar(i, 0, v[i], "hf", `${mLabel(ms[i])}: ${eur(v[i])} €`);
@@ -6562,6 +6567,7 @@ function histSvg(r, f, Wd, uid) {
   const cx = Lh + cw * cur + cw / 2;
   g += `<text class="t-end halo" x="${cx.toFixed(1)}" y="${(Y(curTop) - 4).toFixed(1)}" text-anchor="middle">${e0(curTop)}</text>`;
   ms.forEach((m, i) => { g += `<text x="${(Lh + cw * i + cw / 2).toFixed(1)}" y="${H - 3}" text-anchor="middle">${MONTHS[+m.slice(5) - 1]}</text>`; });
+  for (let i = 0; i < n; i++) g += `<rect class="hit" data-hm="${i}" x="${(Lh + cw * i).toFixed(1)}" y="0" width="${cw.toFixed(1)}" height="${H}" fill="transparent"/>`;
   return `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="${esc(`${r.big} по месяцам: ` + ms.map((m, i) => `${MONTHS[+m.slice(5) - 1]} ${e0(i === cur ? curTop : v[i])}`).join(", ") + `; среднее ${e0(r.avg_month)}`)}">${g}</svg>`;
 }
 /* остатки: банк — на конец последней выписки каждого счёта; наличные — от суммы, которую человек указал сам
@@ -6905,7 +6911,7 @@ function catDetail(r, f, k) {
       + `<div class="plan-a"><button class="linkbtn" type="button" data-xadd="${esc(r.big)}">Добавить</button>${ex.length > 5 ? `<button class="linkbtn" type="button" data-expall="${esc(r.big)}">${all ? "Свернуть" : `Показать все (${ex.length})`}</button>` : ""}</div>` : "") + `</div>`;
   }
   const hs = histSvg(r, f, Math.max(240, Math.min(560, ($("hCats").clientWidth || 320) - 24)), "hh" + (S.histSeq = (S.histSeq || 0) + 1));
-  if (hs) h += `<div class="hist">${hs}</div>`;
+  if (hs) h += `<div class="hist">${hs}<p class="hsel" aria-live="polite">Нажмите на столбец — покажу месяц</p></div>`;
   if (!left) {
     const g = new Set(r.groups || []), ops = allOps().filter(o => String(o.d || "").startsWith(f.month) && g.has(o.g) && costOf(o) > 0).sort((a, b) => costOf(b) - costOf(a));
     if (ops.length) h += subTree(ops);
@@ -7005,14 +7011,25 @@ $("hKpi").addEventListener("click", ev => {
   const tgt = q === "left" ? document.querySelector('#hCats li[data-big="Осталось"]') : null;
   (tgt || $("hCatCard")).scrollIntoView?.({ block: "start", behavior: "smooth" });
 });
-function showGroupOps(big) {
+function showGroupOps(big, month) {
   const f = HF(), r = f?.rows?.find(x => x.big === big); if (!r) return;
   S.opsGroup = { label: big, set: new Set(r.groups || []) };
   draw("ops");
-  const sel = $("fMonth"); if ([...sel.options].some(o => o.value === f.month)) sel.value = f.month; sel.dataset.touched = "1";
+  const mo = month || f.month, sel = $("fMonth"); if ([...sel.options].some(o => o.value === mo)) sel.value = mo; sel.dataset.touched = "1";
   $("fType").value = ""; $("fText").value = ""; S.opsLimit = OPS_PAGE;
   selectTab("ops"); draw("ops");
 }
+/* столбцы «по месяцам» в статье — нажимаемые: месяц и сумма под графиком, кнопка — операции статьи за этот месяц */
+$("hCats").addEventListener("click", ev => {
+  const go = ev.target.closest("[data-hgo]"); if (go) { const [big, mo] = go.dataset.hgo.split("|"); showGroupOps(big, mo); return; }
+  const hit = ev.target.closest(".hist .hit"); if (!hit) return;
+  const f = HF(), li = hit.closest(".cat"), r = f?.rows?.find(x => x.big === li?.dataset.big); if (!r) return;
+  const i = +hit.dataset.hm, ms = f.months || [], cur = ms.length - 1, v = fin((r.hist || [])[i]), mo = ms[i]; if (!mo) return;
+  const hist = hit.closest(".hist"), fut = i === cur && r.big !== "Осталось" && fin(r.fc) > v + 0.005;
+  hist.querySelectorAll("rect[data-i]").forEach(x => x.classList.toggle("sel", +x.dataset.i === i));
+  const txt = r.big === "Осталось" ? `${mLabel(mo)}: ${E0(i === cur ? fin(r.fc) : v)}` : i === cur ? `${mLabel(mo)}: факт ${E0(v)}${fut ? `, прогноз ${E0(r.fc)}` : ""}` : `${mLabel(mo)}: ${E0(v)}`;
+  hist.querySelector(".hsel").innerHTML = `<b>${esc(txt)}</b>` + (r.big !== "Осталось" ? ` <button class="linkbtn" type="button" data-hgo="${esc(r.big)}|${esc(mo)}">Операции за месяц</button>` : "");
+});
 $("fGroup").addEventListener("click", () => { S.opsGroup = null; S.opsLimit = OPS_PAGE; draw("ops"); });
 $("fRange").addEventListener("click", () => { S.opsRange = null; S.opsLimit = OPS_PAGE; draw("ops"); });
 /* ожидаемые платежи: убрать (в этом месяце или всегда) и добавить свой — хранится в профиле (forecast.skip, forecast.planned), считает ядро */
