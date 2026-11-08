@@ -8239,7 +8239,12 @@ const undoText = U => U.kind === "learn" ? (U.ops ? `Обучение: кате�
 const undoShort = U => U.kind === "learn" ? `Отменить ответы обучения${U.ops ? ` (${U.ops})` : ""}` : U.kind === "small" ? `Отменить: мелочь в «Прочее» (${U.ops})` : `Отменить назначение ${pl(U.ops, "операции", "операциям", "операциям")}`;
 function undoShow(fresh) {
   const U = S.undo;
-  if (fresh && U) { U.bar = true; clearTimeout(S.undoT); S.undoT = setTimeout(() => { if (S.undo === U) { U.bar = false; undoShow(); } }, 15000); }
+  if (fresh && U) { U.bar = true; clearTimeout(S.undoT); S.undoT = setTimeout(async () => {
+    if (S.undo !== U) return;
+    U.bar = false; undoShow();
+    // окно отмены прошло: если после последнего ответа месяц готов к закрытию — закрываем сам (иначе он ждал бы следующего действия или перезагрузки)
+    if (!S.busy && !S.undoing && closableRun().length) { S.undo = null; undoShow(); await act("Закрываю месяц…", () => {}); }
+  }, 15000); }
   $("undoBar").hidden = !U || U.kind === "small";
   $("undoBar").classList.toggle("mini", !!U && !U.bar);
   $("undoGo").textContent = U && !U.bar ? undoShort(U) : "Отменить";
