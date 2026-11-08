@@ -6219,6 +6219,12 @@ setInterval(() => {
   if (!opT0) opT0 = Date.now();
   sp.hidden = el.classList.contains("failed") || !(Date.now() - opT0 > 5000) || !$("opBarW").hidden;
   const st = $("opSpinT"); if (st) st.textContent = Date.now() - opT0 > 30000 ? "Идёт дольше обычного. Можно нажать «Остановить» и попробовать ещё раз." : "Работаю, не закрывайте вкладку…";
+  /* П14.10: шаг 1 записан в профиле (например, вернулся с Диска), а загрузки нет — не оставляем экран без выхода: предлагаем выбрать выписку */
+  const stale = onbStep() === 1 && !el.classList.contains("failed") && !S.imp && !S.impQueue.length && !S.impDone.length && !S.impWait && !S.sug?.busy && !(S.book?.state?.statements || []).length && Date.now() - opT0 > 4000;
+  if (stale) {
+    if (st) st.textContent = "Загрузка не идёт. Выберите выписку ещё раз.";
+    sp.hidden = false; $("opRetryL").hidden = false;
+  }
 }, 700);
 $("opRetry").addEventListener("change", () => { const fs = [...($("opRetry").files || [])].filter(f => /\.(csv|xls|xlsx)$/i.test(f.name)); $("opRetry").value = ""; if (!fs.length) return; S.impSkipped = []; onbProcDraw(); impStart(fs); });
 $("opAccEdit").addEventListener("click", () => { logEv("click", "accEdit:02"); accOpen(); });
