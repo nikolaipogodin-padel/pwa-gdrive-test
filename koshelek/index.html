@@ -6188,17 +6188,21 @@ function onbProcDraw() {
   $("opBarW").hidden = !run;
   const pct = run && sug.total ? Math.round(sug.done / sug.total * 100) : 0;
   $("opBar").style.width = pct + "%"; $("opBar").classList.toggle("ind", run && !pct); $("opPct").textContent = run && !pct ? "…" : pct + "%"; $("opTrack").setAttribute("aria-valuenow", String(pct));
-  $("opStop").hidden = !run;
   const sk = S.impSkipped || [], idle = !S.imp && !S.impQueue.length && !S.impDone.length;
   const failed = !!sk.length && idle && !sts.length;   // П14.1: ни одной выписки не загружено — экран целиком про отказ
   $("onbProc").classList.toggle("failed", failed);
   $("onbProcT").textContent = failed ? "Файл не загружен" : "Разбираем выписку";
   ["opStmtCard", "opTaskH", "opTaskX"].forEach(id => { $(id).hidden = failed; });
-  if (failed) { $("opBarW").hidden = true; $("opStop").hidden = true; $("opSpin").hidden = true; }
+  opStopVis();   // П14.9: остановить можно на любом этапе загрузки, не только на ИИ
+  if (failed) { $("opBarW").hidden = true; $("opSpin").hidden = true; }
   $("opTaskX").textContent = aiNoteText();
   $("opSkip").hidden = !sk.length;
   $("opSkip").innerHTML = sk.length ? (failed ? sk.map(x => `<b>${esc(x.name)}</b>: ${esc(x.why)}.${x.todo ? `<br>${esc(x.todo)}` : ""}`).join("<br>") : "Не удалось прочитать: " + sk.map(x => `${esc(x.name)} (${esc(x.why)})`).join("; ") + ". Файл пропущен.") : "";
   $("opRetryL").hidden = !(sk.length && idle);
+}
+function opStopVis() {
+  const failed = $("onbProc").classList.contains("failed"), run = !!S.sug?.busy;
+  $("opStop").hidden = failed || !(run || (onbStep() === 1 && !!((S.imp && !/^(skipped|error|unsupported|rejected)$/.test(S.imp.stage || "")) || S.impQueue.length)));
 }
 /* П14.1: что сказать про ИИ — по фактическому режиму */
 function aiNoteText() {
@@ -6211,8 +6215,10 @@ let opT0 = 0;
 setInterval(() => {
   const el = $("onbProc"), sp = $("opSpin"); if (!el || !sp) return;
   if (el.hidden) { opT0 = 0; sp.hidden = true; return; }
+  opStopVis();
   if (!opT0) opT0 = Date.now();
   sp.hidden = el.classList.contains("failed") || !(Date.now() - opT0 > 5000) || !$("opBarW").hidden;
+  const st = $("opSpinT"); if (st) st.textContent = Date.now() - opT0 > 30000 ? "Идёт дольше обычного. Можно нажать «Остановить» и попробовать ещё раз." : "Работаю, не закрывайте вкладку…";
 }, 700);
 $("opRetry").addEventListener("change", () => { const fs = [...($("opRetry").files || [])].filter(f => /\.(csv|xls|xlsx)$/i.test(f.name)); $("opRetry").value = ""; if (!fs.length) return; S.impSkipped = []; onbProcDraw(); impStart(fs); });
 $("opAccEdit").addEventListener("click", () => { logEv("click", "accEdit:02"); accOpen(); });
@@ -6264,7 +6270,17 @@ $("aiTest").addEventListener("click", async () => {
 });
 document.addEventListener("click", async ev => { if (!ev.target.closest("#inPerm")) return; try { const pm = await window.claude?.use?.("permissions"); if (pm?.manage) await pm.manage(); else showNote?.("Откройте «Настройки» → «Подключения» и вставьте ключ Gemini."); } catch (e) { showNote?.("Откройте «Настройки» → «Подключения» и вставьте ключ Gemini."); } });
 document.addEventListener("change", async ev => { const x = ev.target.closest("[data-setacc]"); if (!x) return; logEv("click", "accKind:settings"); await setAccKinds({ [x.dataset.setacc]: x.value }); });
-$("opStop").addEventListener("click", () => { S.sug?.ctl?.abort(); logEv("click", "onbStop"); });
+/* П14.9: остановка на экране разбора: прерываем ИИ и загрузку файла, возвращаем к выбору выписки (экран «Файл не загружен» с кнопкой «Выбрать другую выписку») */
+function onbStop() {
+  S.sug?.ctl?.abort(); S.imp?.ctl?.abort(); logEv("click", "onbStop");
+  const sts = S.book?.state?.statements || [];
+  if (S.busy || sts.length || onbStep() !== 1) { showNote("Остановили разбор ИИ. Выписка уже загружена — можно продолжать."); return; }
+  const name = S.imp?.name || (S.impQueue[0] && S.impQueue[0].name) || "Выписка";
+  S.imp = null; S.impQueue = []; S.impDone = []; S.impWait = false;
+  S.impSkipped = [{ name, why: "загрузка остановлена вами", todo: "Выберите файл ещё раз — или откройте его в «Внести» позже." }];
+  onbProcDraw(); draw("imp");
+}
+$("opStop").addEventListener("click", onbStop);
 function onbPlace() { }
 async function onbSet(n) {
   S.keepUndo = true;   // П11-3: смена шага не меняет данных — отмена последнего ответа обучения остаётся
@@ -9589,7 +9605,7 @@ const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.m
 let xlsxLoad = null;
 function loadXlsx() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
-  if (!xlsxLoad) xlsxLoad = new Promise((res, rej) => { const s = document.createElement("script"); s.src = XLSX_URL; s.onload = () => res(window.XLSX); s.onerror = () => { xlsxLoad = null; rej(new Error("не загрузилась библиотека для чтения Excel — сохраните выписку как CSV")); }; document.head.appendChild(s); });
+  if (!xlsxLoad) xlsxLoad = new Promise((res, rej) => { const s = document.createElement("script"); s.src = XLSX_URL; const to = setTimeout(() => { xlsxLoad = null; rej(new Error("не загрузилась библиотека для Excel за 25 секунд — проверьте интернет или загрузите файл в формате CSV")); }, 25000); s.onload = () => { clearTimeout(to); res(window.XLSX); }; s.onerror = () => { xlsxLoad = null; rej(new Error("не загрузилась библиотека для чтения Excel — сохраните выписку как CSV")); }; document.head.appendChild(s); });
   return xlsxLoad;
 }
 async function readStatement(file) {
@@ -9644,14 +9660,16 @@ async function impPick(file, batch = false) {
     if (!S.impWait) { S.impWait = true; waitIdle(60000).then(() => { S.impWait = false; const f = S.impQueue.shift(); if (f) impPick(f, batch); }); }
     draw("imp"); return;
   }
-  S.imp = { name: file.name || "statement.csv", size: file.size, stage: "reading", batch };
+  const imp = S.imp = { name: file.name || "statement.csv", size: file.size, stage: "reading", batch };
   $("impDrop").classList.add("has"); draw("imp");
   try {
     const r = await readStatement(file);
-    Object.assign(S.imp, r, { stage: "learn" });
+    if (S.imp !== imp) return;   // П14.9: человек остановил загрузку
+    Object.assign(imp, r, { stage: "learn" });
     await impLearn();
+    if (S.imp !== imp) return;
     await impAuto();
-  } catch (e) { S.imp.stage = "error"; S.imp.error = e?.message || String(e); draw("imp"); }
+  } catch (e) { if (S.imp !== imp) return; imp.stage = "error"; imp.error = e?.message || String(e); draw("imp"); }
 }
 async function impLearn(opts = {}) {
   const imp = S.imp; if (!imp) return;
