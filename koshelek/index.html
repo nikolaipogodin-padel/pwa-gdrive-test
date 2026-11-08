@@ -1645,7 +1645,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     </div></details>
     <details class="sa" id="saAbout"><summary><span class="sa-t">О программе и диагностика</span></summary><div class="sa-b">
       <p class="note" id="foot"></p>
-      <div class="inline"><button class="btn" type="button" id="aiTest">Проверить подключение ИИ</button><button class="btn" type="button" id="kwLog">Скопировать журнал для разработчика</button></div>
+      <div class="inline"><button class="btn" type="button" id="aiTest">Проверить подключение ИИ</button><button class="btn" type="button" id="kwLog">Скопировать журнал для разработчика</button><button class="btn" type="button" id="kwLogFile">Сохранить журнал файлом</button></div>
       <p class="small" id="aiTestOut" aria-live="polite"></p>
     </div></details>
   </section>
@@ -5619,10 +5619,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* журнал работы (meta/log, личный раздел): нажатия, вкладки, действия с длительностью, обращения к ИИ, ошибки.
    Сумм, названий и текстов операций нет. Нужен, чтобы разбирать, где человек застревает. Пишется не чаще раза в 20 с и при уходе со страницы. */
-const LOG = { ev: [], learn: [], dirty: false, timer: null };
+const LOG = { ev: [], learn: [], corr: [], dirty: false, timer: null };
 function logEv(k, d) {
   LOG.ev.push([new Date().toISOString().slice(0, 19), k, d == null ? "" : String(d).slice(0, 160)]);
-  if (LOG.ev.length > 500) LOG.ev.splice(0, LOG.ev.length - 500);
+  if (LOG.ev.length > 2000) LOG.ev.splice(0, LOG.ev.length - 2000);   // П14.12: 500 → 2000
   LOG.dirty = true;
   if (!LOG.timer) LOG.timer = setTimeout(flushLog, 20000);
 }
@@ -5631,14 +5631,21 @@ async function flushLog() {
   if (!LOG.dirty || !DBX.db || S.conflict || !S.canWrite) return;
   if (S.busy) { LOG.timer = setTimeout(flushLog, 5000); return; }
   LOG.dirty = false;
-  try { await DBX.put("meta", "log", { app: APP_VERSION, events: LOG.ev, learn: LOG.learn }); S.saved.set("meta/log", "log"); } catch (e) { LOG.dirty = true; }
+  try { await DBX.put("meta", "log", { app: APP_VERSION, events: LOG.ev, learn: LOG.learn, corr: LOG.corr }); S.saved.set("meta/log", "log"); } catch (e) { LOG.dirty = true; }
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLog(); });
 document.addEventListener("click", ev => {
   const b = ev.target.closest("button, summary, label.tg, [role=button]"); if (!b) return;
   const ds = Object.keys(b.dataset || {}).filter(k => k !== "tip" && k !== "label")[0];
   const val = ["kq", "go", "homem"].includes(ds) ? "=" + String(b.dataset[ds]).slice(0, 10) : "";   // какая из кнопок-цифр / куда переход
-  logEv("click", b.id || (ds ? "data-" + ds + val : "") || (b.textContent || "").trim().replace(/\s+/g, " ").replace(/[\d\s,.€−+-]{3,}/g, " # ").slice(0, 30));
+  const txt = (b.textContent || "").trim().replace(/\s+/g, " ").replace(/[\d\s,.€−+-]{3,}/g, " # ").slice(0, 30);
+  const key = b.id || (ds ? "data-" + ds + val : "") || txt;
+  /* П14.12: какая кнопка, как называется, на каком экране; повтор той же кнопки подряд — одной записью с «×N» */
+  const dl = document.querySelector("dialog[open]"), ctx = (S.tab || "") + (dl ? "/" + (dl.id || "dlg") : "");
+  const det = key + (txt && txt !== key ? " «" + txt.slice(0, 24) + "»" : "") + " @" + ctx;
+  const nowT = Date.now(), lc = LOG.lastClick;
+  if (lc && lc.det === det && nowT - lc.t < 4000 && LOG.ev[lc.i] && LOG.ev[lc.i][1] === "click" && String(LOG.ev[lc.i][2]).startsWith(det)) { lc.n++; lc.t = nowT; LOG.ev[lc.i][2] = det + " ×" + lc.n; LOG.dirty = true; return; }
+  logEv("click", det); LOG.lastClick = { det, t: nowT, n: 1, i: LOG.ev.length - 1 };
 }, true);
 /* ошибки: молчаливый сбой хуже видимого */
 function showErr(msg) {
@@ -5768,7 +5775,27 @@ function canon(x) {
 }
 const sig = doc => JSON.stringify(canon(doc));
 const flatOf = k => { const o = {}; for (const d of Object.values(S.inputs[k])) Object.assign(o, d.items || {}); return o; };
+/* П14.12: журнал правок — почему приложение дало не ту категорию. Без сумм, номеров счетов и точных дат (только месяц); описание очищено как для ИИ.
+   Одна запись на действие (пакет/«все похожие» — n операций). opid — короткий хеш операции: видно повторные правки одной и той же. */
+const hid = t => { let h = 5381; for (const ch of String(t)) h = ((h << 5) + h + ch.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+function logCorr(item, prev) {
+  try {
+    if (S.undoing || !item || !item.was || !item.at || (prev && prev.at === item.at)) return;
+    const key = item.at + "|" + (item.via || item.src || "") + "|" + item.group + "|" + item.sub, last = LOG.corr[LOG.corr.length - 1];
+    if (last && last.k === key) { last.n++; return; }
+    const o = allOps().find(x => x.id === item.tx), op = hid(item.tx);
+    LOG.corr.push({ k: key, t: String(item.at).slice(0, 19), scr: S.tab || "", via: item.via || "", src: item.src || "", chk: item.chk || "",
+      from: [item.was.t, item.was.g, item.was.s].join("/"), to: [item.type, item.group, item.sub].join("/"),
+      ai: item.ai_was ? (item.ai_was.g || "") + "/" + (item.ai_was.s || "") : "", why: String(item.why || "").slice(0, 120),
+      rule: item.make_rule ? String(item.marker || "").slice(0, 40) : "", dir: item.rule_dir || "", n: 1,
+      cp: cleanInfo(item.cp).slice(0, 50), d: o ? infoTxt(o.info).slice(0, 140) : "", pt: o ? payKind(o.pt) : "", mon: item.month || "",
+      opid: op, rep: LOG.corr.filter(c => c.opid === op).length, prevsrc: prev ? (prev.src || prev.via || "") : "" });
+    if (LOG.corr.length > 1000) LOG.corr.splice(0, LOG.corr.length - 1000);
+    LOG.dirty = true; if (!LOG.timer) LOG.timer = setTimeout(flushLog, 20000);
+  } catch (e) { }
+}
 function putItem(k, month, id, item) {
+  if (k === "edits") logCorr(item, findItem("edits", id));
   for (const [m, d] of Object.entries(S.inputs[k])) if (m !== month && d.items && d.items[id]) delete d.items[id];
   if (!S.inputs[k][month]) S.inputs[k][month] = { month, items: {} };
   S.inputs[k][month].items[id] = item;
@@ -6083,7 +6110,7 @@ const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : 
   }
   catch (e) { $("updated").textContent = e?.code === "revoked" ? "Доступ к данным закрыт." : "Ошибка чтения данных [" + (e?.code || "?") + "]. Обновите страницу."; return; }
   const meta = raw.meta || {};
-  LOG.ev = ((meta.log && meta.log.events) || []).slice(-500); LOG.learn = ((meta.log && meta.log.learn) || []).slice(-300); logEv("open", `${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
+  LOG.ev = ((meta.log && meta.log.events) || []).slice(-2000); LOG.learn = ((meta.log && meta.log.learn) || []).slice(-300); LOG.corr = ((meta.log && meta.log.corr) || []).slice(-1000); logEv("open", `${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
   S.inputs = { profile: meta.profile || null, state: meta.state || null, rules: meta.rules || null, journal: raw.journal, edits: raw.edits, cash: raw.cash, pending: raw.pending, uploads: raw.uploads, suggest: meta.suggest || { items: {} } };
   S.saveId = meta.state ? meta.state.save_id || null : null;
   for (const c of COLS) for (const [id, doc] of Object.entries(raw[c])) S.saved.set(c + "/" + id, sig(doc));
@@ -11427,7 +11454,10 @@ document.addEventListener("click", async ev => {
 
 <script>
 document.addEventListener("click",ev=>{if(ev.target.closest("#kwConn"))window.KOSHELEK.openConn()});
-document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const K=window.KOSHELEK;const txt=JSON.stringify({app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),log:LOG.ev.slice(-200),learn:(LOG.learn||[]).slice(-150),auto:(window.kwAutoStat?window.kwAutoStat():null)});const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
+/* П14.12: журнал для разработчика — общий состав для «Скопировать» (коротко) и «Сохранить файлом» (полностью) */
+function kwJournal(full){const K=window.KOSHELEK,p=(typeof profile==="function"&&profile())||{};const cr=l=>l.map(({k,...r})=>r);return{schema:2,app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,tab:(typeof S!=="undefined"&&S.tab)||"",sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),cfg:{tier:(typeof aiTier==="function"?aiTier():""),hist:p.hist||"",onb:p.onb||0,consent:p.consent||null},docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),auto:(window.kwAutoStat?window.kwAutoStat():null),legend:"corr — правки категорий: t время, scr вкладка, via/src/chk откуда была категория и как подтверждена, from→to было→стало, ai что предлагал ИИ (если выбрали другое), why пояснение ИИ, rule правило (если создано), cp контрагент, d описание без дат/чисел/IBAN, pt способ оплаты, mon месяц, opid хеш операции, rep какая по счёту правка этой операции, prevsrc откуда была прошлая правка, n сколько операций затронуто. log — события: click «кнопка «подпись» @вкладка/окно ×повторов подряд»",corr:cr(full?LOG.corr:LOG.corr.slice(-60)),log:full?LOG.ev:LOG.ev.slice(-200),learn:full?(LOG.learn||[]):(LOG.learn||[]).slice(-150)}}
+document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLogFile");if(!b)return;const old=b.textContent;let done=false;try{const txt=JSON.stringify(kwJournal(true)),name="koshelek-zhurnal-"+new Date().toISOString().slice(0,16).replace(/[-:T]/g,"")+".json",f=new File([txt],name,{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:"Журнал Кошелька"});b.textContent="Готово";done=true}catch(e){if(e&&e.name==="AbortError"){b.textContent=old;return}}}if(!done){const u=URL.createObjectURL(f),a=document.createElement("a");a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);b.textContent="Файл сохранён ("+Math.round(txt.length/1024)+" КБ)"}}catch(e){b.textContent="Не удалось сохранить"}setTimeout(()=>b.textContent=old,4000)});
+document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const txt=JSON.stringify(kwJournal(false));const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
 window.addEventListener("koshelek-ai",async()=>{try{S.sample=await window.claude.use("sample");if(S.inputs&&typeof drawAll==="function")drawAll()}catch(e){}});
 window.addEventListener("koshelek-ai-wait",ev=>{const n=document.getElementById("kwAiNote");if(!n)return;clearTimeout(n._t);if(!ev.detail){n.hidden=true;return}n.hidden=false;n.textContent=ev.detail.fb?"Основная модель занята, пробую запасную: "+ev.detail.fb:"ИИ занят, пробую снова через "+ev.detail.s+" с ("+ev.detail.n+" из "+ev.detail.of+")";n._t=setTimeout(()=>{n.hidden=true},20000)});
 
