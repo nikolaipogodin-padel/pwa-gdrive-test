@@ -261,6 +261,8 @@ dialog::backdrop { background: rgb(10 20 26 / .45); }
 #hdrMonth .mnav h2 { font-size: var(--fs-m); }
 #hdrMonth .mnav-b { width: 34px; height: 34px; font-size: 1.3rem; }
 .head:has(#hdrMonth:not([hidden])):not(:has(#qOpen:not([hidden]))) { flex-wrap: nowrap; }
+@media (max-width: 719px) { .head:has(#hdrMonth:not([hidden])):not(:has(#qOpen:not([hidden]))) { flex-wrap: wrap; } #hdrMonth { order: 3; flex: 1 0 100%; justify-content: space-between; } #hdrMonth .home-head { width: 100%; justify-content: space-between; } #hdrMonth .go-btn { white-space: nowrap; }
+}
 @media (max-width: 719px) { #hdrMonth { justify-content: flex-end; } #hdrMonth #fcSub { display: none; } #hdrMonth .mnav-b { width: 30px; } #hdrMonth .mnav h2 { font-size: var(--fs-m); } .head #updated { font-size: var(--fs-s); } }
 .mnav-b { font: inherit; font-size: 1.5rem; font-weight: 700; line-height: 1; width: 40px; height: 40px; border-radius: 999px; border: 0; background: var(--accent-soft); color: var(--accent); cursor: pointer; position: relative; }
 .mnav-b::after { content: ""; position: absolute; inset: -5px -3px; }
