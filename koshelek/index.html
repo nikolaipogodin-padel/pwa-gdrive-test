@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.1в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.2а · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -621,6 +621,11 @@ label.tg > span { min-width: 0; }
 .prop-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lk { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: var(--fs-m); cursor: pointer; min-height: 48px; }
 .lk:last-child { border-bottom: 0; }
+#eRefBox { display: grid; gap: 8px; }
+#eRefPane { display: grid; gap: 8px; }
+.reflist { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card, #fff); }
+.reflist .lk { padding: 8px 12px; min-height: 44px; }
+.reflist .lk span.amt { margin-left: auto; white-space: nowrap; }
 #foot { margin: 0; overflow-wrap: anywhere; }
 .stamp-top { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
 
@@ -1688,6 +1693,14 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <input type="checkbox" id="eRule" hidden>
     <label id="eMarkerWrap" hidden>Свой признак (от 3 символов)<input id="eMarker" type="text" autocomplete="off"></label>
     <div class="note" id="eMarkerInfo" hidden></div>
+    <div id="eRefBox" hidden>
+      <button type="button" class="btn quiet" id="eRefBtn">Это возврат расхода…</button>
+      <div id="eRefPane" hidden>
+        <input id="eRefQ" type="search" placeholder="Найти расход: название, сумма" autocomplete="off" aria-label="Найти расход">
+        <div id="eRefList" class="reflist"></div>
+      </div>
+      <div class="note" id="eRefSel" hidden></div>
+    </div>
     <label>Комментарий<textarea id="eNote" rows="2" placeholder="Например: подарок, а не продукты"></textarea></label>
     <div class="note" id="dlgState"></div>
     <div class="row">
@@ -7678,7 +7691,8 @@ function opRow(o, showEdit = false) {
   const srcChip = o.src === "Предварительно" ? '<span class="chip edit">предварительно</span>' : o.src === "Наличные" ? '<span class="chip">наличные</span>' : "";
   const mk = e && !manual && o.t !== "❓" ? catMark(o) : null;
   const editChip = mk ? `<span class="chip${mk.chk === "single" ? " done" : mk.chk === "batch" ? " move" : ""}" title="${esc("Категория: " + markTxt(mk))}">${/^мелкие/.test(e.via || "") ? "мелочь до 5 €" : /^автоматически: мелочь/.test(e.via || "") ? "мелочь до 2 €" : SRC_TXT[mk.src] === "вы" ? "ваша правка" : SRC_TXT[mk.src]} · ${CHK_TXT[mk.chk]}</span>` : "";
-  const ret = isRefund(o) ? `<span>${S.edits[o.id]?.link ? "возмещение" : "возврат"}</span>` : "";
+  const rof = S.edits[o.id]?.refund_of, rop = rof && allOps().find(y => y.id === rof);
+  const ret = isRefund(o) ? `<span>${S.edits[o.id]?.link ? "возмещение" : "возврат"}${rop ? ` к покупке ${fmtFull(rop.d)}${rop.d.slice(0, 7) !== o.d.slice(0, 7) ? " (другой месяц)" : ""}` : ""}</span>` : "";
   const tr = !manual ? tripOf(o.id) : null, trip = tr ? `<span class="chip" title="${esc("Поездка: " + tr.place + ", " + fmtRange(tr.from, tr.to))}">поездка · ${esc(tr.place)}</span>` : "";   // П11-4: контекст поездки, статья та же
   return `<button class="op" data-id="${esc(o.id)}" type="button">
     <span class="cp">${esc(cpShow(o))}</span>
@@ -10614,6 +10628,42 @@ $("lkForm").addEventListener("submit", async ev => {
 
 /* ===== правка категории: применяется сразу ===== */
 const NEW_OPT = "＋ Новая…";
+/* П15.2 (R14): приход → «Это возврат расхода». Кандидаты — расходы до даты прихода, сумма не меньше возврата; любые прошлые месяцы */
+const refToks = x => new Set(((cpText(x) || "") + " " + (x.info || "")).toLowerCase().split(/[^a-zа-яāčēģīķļņšūž0-9]+/i).filter(w => w.length >= 4 && !/^\d+$/.test(w)));
+function refCands(o, q) {
+  const tk = refToks(o), qq = String(q || "").trim().toLowerCase(), qn = qq.replace(",", ".");
+  const out = [];
+  for (const x of allOps()) {
+    if (x.t !== "Расход" || x.a >= 0 || x.d > o.d || -x.a < o.a - 0.005 || dayDiff(x.d, o.d) > 548) continue;
+    const hay = hayOp(x);
+    if (qq && !hay.includes(qq) && !String(Math.abs(x.a).toFixed(2)).includes(qn)) continue;
+    let sc = Math.abs(-x.a - o.a) <= 0.005 ? 100 : 0, nm = 0;
+    for (const w of refToks(x)) if (tk.has(w)) nm++;
+    sc += Math.min(nm, 2) * 30 - dayDiff(x.d, o.d) / 30;
+    out.push([sc, x]);
+  }
+  return out.sort((a, b) => b[0] - a[0]).slice(0, qq ? 20 : 8).map(r => r[1]);
+}
+function refDraw() {
+  const o = S.current; if (!o) return;
+  const list = refCands(o, $("eRefQ").value);
+  $("eRefList").innerHTML = list.length ? list.map(x => `<label class="lk"><input type="radio" name="refpick" value="${esc(x.id)}"${S.refPick === x.id ? " checked" : ""}><span><b>${esc(cpText(x).slice(0, 36))}</b><br><span class="small muted">${fmtFull(x.d)} · ${esc(x.s || x.g)}${x.d.slice(0, 7) !== o.d.slice(0, 7) ? " · другой месяц" : ""}</span></span><span class="amt num">${eur(x.a)} €</span></label>`).join("")
+    : '<div class="empty" style="padding:12px">Подходящих расходов нет: сумма не меньше возврата, не старше 18 месяцев. Попробуйте поиск.</div>';
+}
+function refSel() {
+  const o = S.current, x = S.refPick && allOps().find(y => y.id === S.refPick);
+  $("eRefSel").hidden = !x;
+  if (x) $("eRefSel").textContent = `Возврат к покупке: ${cpText(x).slice(0, 36)} · ${fmtFull(x.d)} · ${eur(x.a)} €. В итогах возврат уменьшит «${x.s || x.g}» в месяце прихода (${mLabel(o.d.slice(0, 7))}).`;
+}
+$("eRefBtn").addEventListener("click", () => { const open = $("eRefPane").hidden; $("eRefPane").hidden = !open; if (open) { $("eRefQ").value = ""; refDraw(); logEv("ref-open", `кандидатов ${refCands(S.current, "").length}`); } });
+$("eRefQ").addEventListener("input", refDraw);
+$("eRefList").addEventListener("change", ev => {
+  if (ev.target.name !== "refpick") return;
+  const x = allOps().find(y => y.id === ev.target.value); if (!x) return;
+  S.refPick = x.id;
+  $("eType").value = "Возврат"; syncGroups(x.g, x.s); refSel(); markerInfo();
+  logEv("ref-pick", `${x.d.slice(0, 7) === S.current.d.slice(0, 7) ? "тот же месяц" : "другой месяц"} · ${dayDiff(x.d, S.current.d)} дн. · ${Math.abs(-x.a - S.current.a) <= 0.005 ? "сумма точно" : "сумма меньше покупки"}`);
+});
 function openOp(id) {
   const o = allOps().find(x => x.id === id); if (!o) return;
   if (isManual(o)) {
@@ -10624,6 +10674,8 @@ function openOp(id) {
   }
   S.current = o;
   const e = S.edits[id];
+  S.refPick = e?.refund_of || null;
+  $("eRefBox").hidden = !(o.a > 0 && o.t !== "Перемещение"); $("eRefPane").hidden = true; refSel();
   $("dlgCp").textContent = (cpText(o) ? cpText(o).slice(0, 80) + " · " : "") + fmtDate(o.d) + " · " + eur(o.a) + " €";
   $("dlgDesc").textContent = o.info;
   const types = Object.keys(S.catalog?.types || {});
@@ -10794,7 +10846,7 @@ $("dlgForm").addEventListener("submit", async ev => {
     const bid = "B" + Date.now().toString(36);   // П15.1 (R2): общий номер пакета (у одиночной правки его нет)
     const pe = S.edits[o.id], aiWas = pe && /^авто/.test(pe.via || "") && (pe.group !== c.group || pe.sub !== c.sub) ? { g: pe.group, s: pe.sub } : pe?.ai_was && !pe.ai_was.q ? pe.ai_was : null;
     putItem("edits", o.d.slice(0, 7), o.id, Object.assign({ tx: o.id, month: o.d.slice(0, 7), type: opType(c, o), group: c.group, sub: c.sub, note: $("eNote").value.trim(),
-      was: { t: o.t, g: o.g, s: o.s }, cp: cpText(o), amount: o.a, date: o.d, make_rule: mk, marker: mk ? marker : "", rule_dir: rdir, at, state: "ожидает", src: "user", chk: "single" }, aiWas ? { ai_was: aiWas } : {}, rule && marker ? { batch: bid } : {}));
+      was: { t: o.t, g: o.g, s: o.s }, cp: cpText(o), amount: o.a, date: o.d, make_rule: mk, marker: mk ? marker : "", rule_dir: rdir, at, state: "ожидает", src: "user", chk: "single" }, aiWas ? { ai_was: aiWas } : {}, rule && marker ? { batch: bid } : {}, S.refPick && o.a > 0 && opType(c, o) === "Возврат" ? { refund_of: S.refPick } : {}));
     S.simDone = 0;
     const done = [{ id: o.id, was: o.t, sum: o.a }];
     if (rule && marker) {
