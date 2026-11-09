@@ -6485,7 +6485,7 @@ document.addEventListener("click", async ev => {
 });
 RENDER.alerts = function () {
   const st = S.status, items = [];
-  const add = (cls, html, go) => items.push(`<div class="al ${cls}"><span>${html}</span>${go ? `<button class="go" type="button" ${go[0] === "save" ? 'data-save="1"' : go[0] === "reload" ? 'data-reload="1"' : go[0] === "closeall" ? 'data-closeall="1"' : go[0] === "resealall" ? 'data-resealall="1"' : `data-go="${go[0]}"`}>${go[1]}</button>` : ""}</div>`);
+  const add = (cls, html, go) => items.push(`<div class="al ${cls}"><span>${html}</span>${go ? `<button class="go" type="button" ${go[0] === "save" ? 'data-save="1"' : go[0] === "reload" ? 'data-reload="1"' : go[0] === "closeall" ? 'data-closeall="1"' : go[0] === "resealall" ? 'data-resealall="1"' : go[0] === "restoreprin" ? 'data-restoreprin="1"' : `data-go="${go[0]}"`}>${go[1]}</button>` : ""}</div>`);
   if (S.conflict) add("bad", "Кошелёк изменили в другом окне или под другим аккаунтом. Обновите страницу, чтобы увидеть изменения.", ["reload", "Обновить страницу"]);
   else if (S.saveFailed && !S.saving) add("bad", "Последние изменения не сохранились в базе.", ["save", "Сохранить ещё раз"]);
   const dm = [...new Set((st?.closed_drift || []).map(x => x.month))].sort();
@@ -6494,6 +6494,8 @@ RENDER.alerts = function () {
   const mtxt = dm.length > 1 ? `Изменились закрытые месяцы: ${mLabel(dm[0])} – ${mLabel(dm[dm.length - 1])} (${dm.length})` : `Изменился закрытый месяц ${mLabel(dm[0] || "")}`;
   if (dm.length && qClosed) add("bad", `${mtxt}. Сначала ${pl(qClosed, "вопрос", "вопроса", "вопросов")} в них (вкладка «Разбор» вверху) — потом «Принять».`);
   else if (dm.length) add("bad", mtxt + ".", ["resealall", dm.length > 1 ? "Принять все" : "Принять"]);
+  const lostP = lostPrincipal();
+  if (lostP.length) add("warn", `Тело займов попало в другую категорию из-за массовой правки: ${pl(lostP.length, "операция", "операции", "операций")} (${[...new Set(lostP.map(o => mLabel(o.d.slice(0, 7))))].slice(0, 3).join(", ")}${new Set(lostP.map(o => o.d.slice(0, 7))).size > 3 ? "…" : ""}).`, ["restoreprin", "Вернуть"]);
   if (st?.warnings?.length) add("warn", `Замечаний пересчёта: ${st.warnings.length}.`, ["q", "Открыть"]);
   if (cashAsk() && !cashAskSkipped()) {
     const cur = todayISO().slice(0, 7), prev = W._py.mshift(cur, -1);
@@ -9423,6 +9425,29 @@ async function reclassify() {
   if (ok) showNote(`ИИ проверил ${pl(moved + toQ + kept, "операцию", "операции", "операций")}: изменено ${moved}, в вопросы ${toQ}, без изменений ${kept}.${closedHit && (S.status?.closed_drift || []).length ? " Итоги закрытых месяцев изменились — примите изменения." : ""}${partNote}`);
   } finally { aiUnlock(); }
 }
+/* П14.14: тело займов, которое «для похожих» превратило в другую категорию (раньше защиты не было) */
+const BATCH_VIA = "ваш выбор: для похожих";
+function lostPrincipal() {
+  const E = S.edits || {}; return allOps().filter(o => o.t !== "Погашение долга" && E[o.id]?.via === BATCH_VIA && E[o.id].was?.t === "Погашение долга");
+}
+document.addEventListener("click", async ev => {
+  if (!ev.target.closest("[data-restoreprin]")) return;
+  const lost = lostPrincipal(); if (!lost.length) return;
+  const was = new Map(lost.map(o => [o.id, { ...S.edits[o.id].was, d: o.d, a: o.a, cp: cpText(o), cur: { t: o.t, g: o.g, s: o.s } }]));
+  logEv("restore-prin", String(lost.length));
+  await act("Возвращаю тело займов…", () => {
+    for (const id of was.keys()) delItem("edits", id);
+    reapply(); recompute();   // allOps() читает пересчитанный вид — без этого правила «не видны»
+    const at = new Date().toISOString();
+    for (const [id, w] of was) {
+      const o = allOps().find(x => x.id === id);
+      if (o && o.t === w.t) continue;   // правила вернули ту же категорию
+      putItem("edits", w.d.slice(0, 7), id, { tx: id, month: w.d.slice(0, 7), type: w.t, group: w.g, sub: w.s, note: "", was: w.cur, cp: w.cp, amount: w.a, date: w.d, make_rule: false, marker: "", at, state: "ожидает", via: "восстановление: тело займа", src: "user", chk: "batch" });
+    }
+    reapply();
+  });
+  showNote(`Возвращено «Погашение долга»: ${lost.length}.${(S.status?.closed_drift || []).length ? " Итоги закрытых месяцев изменились — примите изменения." : ""}`);
+});
 /* принять изменения закрытых месяцев: пересчитать запечатанные итоги; месяцы с вопросами не принимаются */
 document.addEventListener("click", async ev => {
   if (!ev.target.closest("[data-resealall]")) return;
@@ -10556,7 +10581,8 @@ const hayOp = x => ((cpText(x) || "") + " | " + (x.info || "")).toLowerCase();
 function similarOps(o, m, c) {
   const lm = String(m || "").trim().toLowerCase(); if ([...lm].length < 3) return [];
   const rd = ruleDirFor(o.a > 0 ? "in" : "out", c.type === "Возврат" ? "Расход" : c.type);
-  return allOps().filter(x => !isManual(x) && x.id !== o.id && (rd === "any" || (x.a > 0 ? "in" : "out") === rd) && hayOp(x).includes(lm));
+  /* П14.14: платежи по займам («Погашение долга») массовой правкой не трогаем — у них получатель часто вы сами (NIKOLAJS POGODINS) */
+  return allOps().filter(x => !isManual(x) && x.id !== o.id && (rd === "any" || (x.a > 0 ? "in" : "out") === rd) && hayOp(x).includes(lm) && (x.t !== "Погашение долга" || c.type === "Погашение долга"));
 }
 const opType = (c, x) => { const t = c.type === "Возврат" ? "Расход" : c.type; return t === "Расход" && x.a > 0 ? "Возврат" : t; };
 const sameCat = (x, c) => x.t === opType(c, x) && x.g === c.group && x.s === c.sub;
