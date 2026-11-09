@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.1б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.1в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -7781,7 +7781,12 @@ RENDER.questions = function () {
   const TECH = /повторя|нестандартный id|^ключ .* ≠ id|: нет поля |не равен расчёту|не по дате/;
   const aud = S.audit?.issues || [], tech = aud.filter(x => TECH.test(x));
   if (tech.length) { const k = tech.join("|"); if (S._techLogged !== k) { S._techLogged = k; logEv("audit", tech.slice(0, 5).join("; ").slice(0, 220)); } }
-  const w = (S.status?.warnings || []).concat(aud.filter(x => !TECH.test(x)));
+  /* П15.1в: сдвиг итогов закрытых месяцев — одной строкой, не по полю на месяц (подробности — в журнале) */
+  const DRIFT = /^закрытый месяц (\d{4}-\d{2}): /;
+  const dm = [...new Set(aud.filter(x => DRIFT.test(x)).map(x => x.match(DRIFT)[1]))].sort();
+  if (dm.length) { const k = "drift" + dm.length + dm[0] + dm[dm.length - 1]; if (S._driftLogged !== k) { S._driftLogged = k; logEv("audit", `итоги закрытых месяцев изменились: ${dm.length} (${dm[0]}…${dm[dm.length - 1]})`); } }
+  const driftTxt = dm.length ? [`Изменились итоги закрытых месяцев: ${dm.length > 1 ? `${mLabel(dm[0])} – ${mLabel(dm[dm.length - 1])} (${dm.length})` : mLabel(dm[0])}. Нажмите «Принять» вверху — итоги пересчитаются.`] : [];
+  const w = (S.status?.warnings || []).concat(driftTxt, aud.filter(x => !TECH.test(x) && !DRIFT.test(x)));
   $("warnH").hidden = $("warnList").hidden = !w.length;
   $("warnList").innerHTML = w.map(x => `<li>${esc(x)}</li>`).join("");
 };
@@ -10128,7 +10133,7 @@ function previewHtml(imp) {
     if (r.code === "no_balances") return `<li><span>В файле нет остатков: сверку с банком подтвердит остаток на конец периода из интернет-банка.</span><label style="flex-direction:column">Остаток на ${esc(fmtFull(pv.period.to))}, €<input id="impClosing" type="text" inputmode="decimal" autocomplete="off" value="${esc(dec.closing)}"></label></li>`;
     if (r.code === "probable_duplicates") return `<li><span>${esc(r.text)}. Отмеченные не будут добавлены.</span>${pv.probable_duplicates.map(d => `<label><input type="checkbox" data-skip="${esc(d.new_id)}"${dec.skip.has(d.new_id) ? " checked" : ""}> не брать: ${esc(fmtFull(d.date))} ${esc(String(d.cp).slice(0, 40))} ${eur(d.amount)}</label>`).join("")}</li>`;
     if (r.code === "reconcile") return `<li class="bad"><span>${esc(r.text)}. Возможно, между выписками пропущен период — загрузите недостающую выписку. Импортировать всё равно можно.</span></li>`;
-    if (r.code === "late_in_closed") return `<li><span>${esc(r.text)}. После импорта их можно принять: кнопка «Принять» вверху.</span></li>`;
+    if (r.code === "late_in_closed") { const n = r.ids?.length || (String(r.text).match(/\d+/) || [""])[0]; return `<li><span>${n ? `${n} ${Number(n) % 10 === 1 && Number(n) % 100 !== 11 ? "новая операция попадёт" : "новых операций попадут"}` : "Новые операции попадут"} в уже закрытые месяцы — их итоги пересчитаются. Для загрузки истории это нормально: после импорта нажмите «Принять» вверху.</span></li>`; }
     return `<li class="info"><span>${esc(r.text)}</span></li>`;
   }).join("");
   const newQ = (pv.new_ops || []).filter(o => o.type === "❓").length;
