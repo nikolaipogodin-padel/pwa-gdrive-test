@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.2а · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.2б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -621,8 +621,8 @@ label.tg > span { min-width: 0; }
 .prop-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lk { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: var(--fs-m); cursor: pointer; min-height: 48px; }
 .lk:last-child { border-bottom: 0; }
-#eRefBox { display: grid; gap: 8px; }
-#eRefPane { display: grid; gap: 8px; }
+#eRefBox, #rRefBox { display: grid; gap: 8px; }
+#eRefPane, #rRefPane { display: grid; gap: 8px; }
 .reflist { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card, #fff); }
 .reflist .lk { padding: 8px 12px; min-height: 44px; }
 .reflist .lk span.amt { margin-left: auto; white-space: nowrap; }
@@ -1722,6 +1722,15 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <label>Сумма, €<input id="rAmt" type="text" inputmode="decimal" autocomplete="off" required></label>
     </div>
     <label id="rAcctWrap">Откуда платили<select id="rAcct"></select></label>
+    <div id="rRefBox" hidden>
+      <button type="button" class="btn quiet" id="rRefBtn">Это возврат расхода…</button>
+      <div id="rRefPane" hidden>
+        <input id="rRefQ" type="search" placeholder="Найти расход: название, сумма" autocomplete="off" aria-label="Найти расход">
+        <div id="rRefList" class="reflist"></div>
+      </div>
+      <div class="note" id="rRefSel" hidden></div>
+      <button type="button" class="btn quiet" id="rRefNo" hidden>Не возврат — это доход</button>
+    </div>
     <label>Группа<select id="rGroup"></select></label>
     <label id="rNewGWrap" hidden>Название новой группы<input id="rNewG" type="text" maxlength="40" autocomplete="off"></label>
     <label>Подстатья<select id="rSub"></select></label>
@@ -3288,7 +3297,7 @@ function syncCash(book, warns, closed) {
     const income = pget(c, 'kind') === 'in';   // 1.5.0: доход наличными — поступление типа «Доход» (в Python его нет)
     book.journal.set('CASH-' + docId, { id: 'CASH-' + docId, source: 'Наличные', date: c.date, cp: 'Наличные',
       info: truthy(pget(c, 'note')) ? c.note : c.sub, amount: income ? amt : -amt, cur: 'EUR', pay_type: 'CASH',
-      type: income ? 'Доход' : 'Расход', group: c.group, sub: c.sub, rule: 'наличные', status: 'подтверждено' });
+      type: income ? (truthy(pget(c, 'refund_of')) ? 'Возврат' : 'Доход') : 'Расход', group: c.group, sub: c.sub, rule: 'наличные', status: 'подтверждено' });
   }
 }
 
@@ -3922,7 +3931,7 @@ function applyEdits(book, docs) {
   book.overrides = overrides;
   const cash = {};
   const cd = docs.cash || {};
-  for (const docId of sortedDocIds(cd)) { const c = unwrap(cd[docId]); cash[docId] = {}; for (const k of ['date', 'amount', 'group', 'sub', 'note', 'state', 'at']) cash[docId][k] = pget(c, k, null); if (hasOwn(c, 'kind')) cash[docId].kind = c.kind; }
+  for (const docId of sortedDocIds(cd)) { const c = unwrap(cd[docId]); cash[docId] = {}; for (const k of ['date', 'amount', 'group', 'sub', 'note', 'state', 'at']) cash[docId][k] = pget(c, k, null); if (hasOwn(c, 'kind')) cash[docId].kind = c.kind; if (truthy(pget(c, 'refund_of'))) cash[docId].refund_of = c.refund_of; }
   book.cash = cash;
   const pend = {};
   const pd = docs.pending || {};
@@ -10883,7 +10892,7 @@ function openRec(col, id) {
   const it = findItem(col, id); if (!it) return;
   if (col === "pending" && it.state === "сверено с выпиской" && it.bank_id && allOps().some(o => o.id === it.bank_id)) { openOp(it.bank_id); return; }
   const inc = col === "cash" && it.kind === "in", neg = col === "pending" && +it.amount < 0;
-  S.rec = { col, id, kind: inc ? "in" : "out", k0: inc ? "in" : "out", neg, acct0: col === "cash" ? "cash" : it.pay === "unknown" ? "unknown" : (it.acct || primaryAcct()), g0: it.group, s0: it.sub, m0: String(it.date || "").slice(0, 7) };
+  S.rec = { col, id, refund: inc && it.refund_of || null, kind: inc ? "in" : "out", k0: inc ? "in" : "out", neg, acct0: col === "cash" ? "cash" : it.pay === "unknown" ? "unknown" : (it.acct || primaryAcct()), g0: it.group, s0: it.sub, m0: String(it.date || "").slice(0, 7) };
   $("rDate").max = todayISO(); $("rDate").value = it.date || todayISO();
   $("rAmt").value = String((Math.abs(+it.amount) || 0).toFixed(2)).replace(".", ",");
   $("rNote").value = (col === "cash" ? it.note : it.desc) || "";
@@ -10899,7 +10908,7 @@ function openRec(col, id) {
 }
 function resetRecDel() { clearTimeout(S.recDelT); $("recDel").dataset.confirm = ""; $("recDel").textContent = "Удалить"; }
 function recKind(k, g, s) {
-  const R = S.rec; R.kind = k; const inc = k === "in";
+  const R = S.rec; R.kind = k; const inc = k === "in"; if (!inc) R.refund = null;
   $("rKindOut").setAttribute("aria-pressed", String(!inc)); $("rKindIn").setAttribute("aria-pressed", String(inc));
   if (inc) $("rAcct").value = "cash";
   $("rNoteL").textContent = inc ? "От кого, за что" : "Что купили";
@@ -10909,15 +10918,41 @@ function recVis() {
   const R = S.rec, cash = R.kind === "in" || $("rAcct").value === "cash";
   $("rAcctWrap").hidden = R.kind === "in";
   $("rKind").hidden = !cash;
-  $("recTitle").textContent = R.kind === "in" ? "Доход наличными" : cash ? "Трата наличными" : "Трата картой";
+  $("rRefBox").hidden = R.kind !== "in"; $("rRefPane").hidden = $("rRefPane").hidden || R.kind !== "in"; recRefSel();
+  $("recTitle").textContent = R.kind === "in" ? (R.refund ? "Возврат наличными" : "Доход наличными") : cash ? "Трата наличными" : "Трата картой";
   recState();
 }
-const recCats = () => S.rec.kind === "in" ? (S.catalog?.types?.["Доход"] || {}) : catGroups();
+const recCats = () => S.rec.kind === "in" && !S.rec.refund ? (S.catalog?.types?.["Доход"] || {}) : catGroups();
+/* П15.2б: наличный приход → «Это возврат расхода» (те же кандидаты, что у операции банка) */
+const recPseudo = () => { const a = Math.round(parseFloat(String($("rAmt").value).replace(/\s/g, "").replace(",", ".")) * 100) / 100; return { a: a > 0 ? a : 0.01, d: $("rDate").value || todayISO(), cp: $("rNote").value, info: $("rNote").value }; };
+function recRefDraw() {
+  const o = recPseudo(), list = refCands(o, $("rRefQ").value);
+  $("rRefList").innerHTML = list.length ? list.map(x => `<label class="lk"><input type="radio" name="rrefpick" value="${esc(x.id)}"${S.rec.refund === x.id ? " checked" : ""}><span><b>${esc(cpText(x).slice(0, 36))}</b><br><span class="small muted">${fmtFull(x.d)} · ${esc(x.s || x.g)}${x.d.slice(0, 7) !== o.d.slice(0, 7) ? " · другой месяц" : ""}</span></span><span class="amt num">${eur(x.a)} €</span></label>`).join("")
+    : '<div class="empty" style="padding:12px">Подходящих расходов нет: сумма не меньше возврата, не старше 18 месяцев. Проверьте сумму и дату или попробуйте поиск.</div>';
+}
+function recRefSel() {
+  const R = S.rec; if (!R) return;
+  const x = R.refund && allOps().find(y => y.id === R.refund);
+  $("rRefSel").hidden = !x; $("rRefNo").hidden = !R.refund || R.kind !== "in";
+  if (x) $("rRefSel").textContent = `Возврат к покупке: ${cpText(x).slice(0, 36)} · ${fmtFull(x.d)} · ${eur(x.a)} €. Уменьшит «${x.s || x.g}» в месяце прихода.`;
+  else if (R.refund) $("rRefSel").hidden = false, $("rRefSel").textContent = "Возврат к расходу, которого нет в учёте (удалён?). Выберите другой или нажмите «Не возврат».";
+  $("rRefBtn").hidden = !!R.refund;
+}
+$("rRefBtn").addEventListener("click", () => { const open = $("rRefPane").hidden; $("rRefPane").hidden = !open; if (open) { $("rRefQ").value = ""; recRefDraw(); logEv("ref-open", "наличные · кандидатов " + refCands(recPseudo(), "").length); } });
+$("rRefQ").addEventListener("input", recRefDraw);
+$("rAmt").addEventListener("input", () => { if (!$("rRefPane").hidden) recRefDraw(); });
+$("rRefList").addEventListener("change", ev => {
+  if (ev.target.name !== "rrefpick") return;
+  const x = allOps().find(y => y.id === ev.target.value); if (!x) return;
+  S.rec.refund = x.id; $("rRefPane").hidden = true; recGroups(x.g, x.s); recVis();
+  logEv("ref-pick", `наличные · ${x.d.slice(0, 7) === recPseudo().d.slice(0, 7) ? "тот же месяц" : "другой месяц"} · ${dayDiff(x.d, recPseudo().d)} дн.`);
+});
+$("rRefNo").addEventListener("click", () => { S.rec.refund = null; recGroups("Доход", "Возвраты и возврат долга"); recVis(); });
 function recGroups(g, s) {
   const R = S.rec, gn = Object.keys(recCats()).filter(x => x !== "❓");
   if (g && g === R.g0 && g !== "❓" && R.kind === R.k0 && !gn.includes(g)) gn.unshift(g);   // своя категория вне справочника — не теряется
   gn.sort(RU);
-  const def = R.kind === "in" ? (gn.includes("Доход") ? "Доход" : gn[0]) : (gn.includes("Продукты") ? "Продукты" : gn[0]);
+  const def = R.kind === "in" && !R.refund ? (gn.includes("Доход") ? "Доход" : gn[0]) : (gn.includes("Продукты") ? "Продукты" : gn[0]);
   fillSelect($("rGroup"), gn.concat([NEW_OPT]), gn.includes(g) ? g : def);
   recSubs(s);
 }
@@ -10981,20 +11016,20 @@ $("recForm").addEventListener("submit", async ev => {
   const ok = await act("Сохраняю запись…", () => {
     const old = findItem(R.col, R.id); if (!old) return false;
     // новая группа или подстатья — в справочник правил (видна в списках дальше)
-    const t = inc ? "Доход" : "Расход";
+    const t = inc && !R.refund ? "Доход" : "Расход";
     if (!((S.catalog?.types?.[t] || {})[group] || []).includes(sub) && !(group === R.g0 && sub === R.s0 && R.kind === R.k0)) {
       const rd = clone(S.book.rules); rd.categories = (rd.categories || []).concat([{ type: t, group, sub }]); rd.version = (rd.version || 0) + 1; S.book.rules = rd;
     }
     const edited = new Date().toISOString();
     if (to === R.col) {
       const it = Object.assign({}, old, { date, amount: R.neg ? -amount : amount, group, sub, edited });
-      if (to === "cash") { it.note = note; if (inc) it.kind = "in"; else delete it.kind; }
+      if (to === "cash") { it.note = note; if (inc) it.kind = "in"; else delete it.kind; if (inc && R.refund) it.refund_of = R.refund; else delete it.refund_of; }
       else { it.desc = note; if (acct === "unknown") { delete it.acct; it.pay = "unknown"; } else { delete it.pay; if (old.acct || acct !== R.acct0) it.acct = acct; } }
       putItem(to, date.slice(0, 7), R.id, it);
     } else {
       delItem(R.col, R.id);
       const base = { date, amount, group, sub, at: old.at || edited, state: "ожидает", edited };
-      if (to === "cash") putItem("cash", date.slice(0, 7), rid("c"), Object.assign(base, { note }, inc ? { kind: "in" } : {}));
+      if (to === "cash") putItem("cash", date.slice(0, 7), rid("c"), Object.assign(base, { note }, inc ? { kind: "in" } : {}, inc && R.refund ? { refund_of: R.refund } : {}));
       else putItem("pending", date.slice(0, 7), rid("p"), Object.assign(base, { desc: note }, acct === "unknown" ? { pay: "unknown" } : acct ? { acct } : {}));
     }
     if (S.recScope === "rule" && !inc && to === "pending") {
