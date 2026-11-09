@@ -3604,14 +3604,30 @@ function reconcileAll(book) {
   const groups = new Map();
   for (const s of sts) { const a = acctOf(s); if (!groups.has(a)) groups.set(a, []); groups.get(a).push(s); }
   const out = [];
+  /* П14.13: цепочка остатков начинается после последнего пропуска в выписках счёта — до пропуска остаток проверить нечем.
+     segStart(s) — начало непрерывного участка выписок, в котором лежит s; без пропусков совпадает с началом всех выписок счёта (поведение прежнее). */
+  const dsh = (iso, k) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) + k)).toISOString().slice(0, 10);
+  const segStart = new Map();
+  for (const lst of groups.values()) {
+    const srt = [...lst].sort((a, b) => cmpStr(a.date_from, b.date_from));
+    let start = srt[0].date_from, end = srt[0].date_to;
+    segStart.set(srt[0], start);
+    for (const x of srt.slice(1)) {
+      if (cmpStr(x.date_from, dsh(end, 1)) > 0) start = x.date_from;
+      if (cmpStr(x.date_to, end) > 0) end = x.date_to;
+      segStart.set(x, start);
+    }
+  }
   for (const s of sts) {
     const acct = acctOf(s);
     const lst = groups.get(acct);
     let latest = lst[0];
     for (const x of lst) if (cmpTuple(skey(x), skey(latest)) > 0) latest = x;
     const known = lst.filter((x) => x.opening !== null && x.opening !== undefined);
-    let base = known[0] || null;
-    for (const x of known) if (cmpTuple([x.date_from, x.date_to], [base.date_from, base.date_to]) < 0) base = x;
+    const seg = segStart.get(s), inSeg = known.filter((x) => cmpStr(x.date_from, seg) >= 0);
+    const cand = inSeg.length ? inSeg : known;
+    let base = cand[0] || null;
+    for (const x of cand) if (cmpTuple([x.date_from, x.date_to], [base.date_from, base.date_to]) < 0) base = x;
     const ops = [...book.journal.values()].filter((o) => isBank(o) && (truthy(o.acct) ? o.acct : dflt) === acct);
     const per = ops.filter((o) => cmpStr(s.date_from, o.date) <= 0 && cmpStr(o.date, s.date_to) <= 0);
     const isLatest = s === latest;
