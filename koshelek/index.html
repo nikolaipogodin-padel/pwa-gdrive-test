@@ -5986,6 +5986,13 @@ function promoteCand(rd, k) {
 /* Месяцы, которые апп запечатал сам (загружена выписка за месяцы до закрытого — sealMissing, без closed_meta), человек не закрывал:
    их итоги пересчитываются сами, как только в месяце нет вопросов и проверка закрытия проходит (П7.6).
    Месяцы, закрытые или принятые человеком (closed_meta без auto), — только по «Принять». */
+/* П14.13: причина отказа закрытия/«Принять» — коротким кодом без сумм и имён (для журнала) */
+function probKinds(ps) {
+  return (ps || []).map(p => /^месяцы закрываются подряд/.test(p) ? "order" : /^данные выписок идут до/.test(p) ? "asof" : /^сверка не подтверждена/.test(p) ? "recon-unconfirmed"
+    : /^сверка не сходится/.test(p) ? "recon-mismatch" : /^❓ осталось (\d+)/.test(p) ? "q:" + RegExp.$1 : /^предварительных записей.*?: (\d+)/.test(p) ? "pending:" + RegExp.$1
+    : /^перемещения или тело/.test(p) ? "moved-in-net" : /^в журнале нет операций/.test(p) ? "no-ops" : "other").join(",");
+}
+const sealFailTxt = (m, ps) => `${mLabel(m)}: ${(ps || [])[0] || "причина не определена"}${(ps || []).length > 1 ? ` (+ ещё ${ps.length - 1})` : ""}`;
 function autoSeal() {
   const st = S.book?.state; if (!st?.closed_totals) return 0;
   const meta = st.closed_meta || {}, auto = Object.keys(st.closed_totals).filter(m => !meta[m] || meta[m].auto);
@@ -5996,6 +6003,7 @@ function autoSeal() {
     if (!drift.has(m)) continue;
     const res = W.closeMonth(S.book, m, { reseal: true, now: nowStr(), scope: "month" });
     if (res.ok) { st.closed_meta[m].auto = true; n++; }
+    else { const key = m + probKinds(res.problems); if (S._sealFail !== key) { S._sealFail = key; logEv("autoseal-fail", `${m} ${probKinds(res.problems)}`); } }
   }
   if (n) logEv("autoseal", String(n));
   return n;
@@ -6451,12 +6459,12 @@ document.addEventListener("click", async ev => {
   await act(run.length > 1 ? `Закрываю ${pl(run.length, "месяц", "месяца", "месяцев")}…` : "Закрываю месяц…", () => {
     for (const m of run) {
       const res = W.closeMonth(S.book, m, { now: nowStr(), scope: "month" });
-      if (!res.ok) { fail = { month: m, problems: res.problems }; break; }
+      if (!res.ok) { fail = { month: m, problems: res.problems }; logEv("close-fail", `${m} ${probKinds(res.problems)}`); break; }
       done.push(m);
     }
     if (!done.length) return false;
   });
-  if (fail) { S.closeRes = fail; S.openMonths = S.openMonths || new Set(); S.openMonths.add(fail.month); showMonthOps(fail.month); }
+  if (fail) { S.closeRes = fail; S.openMonths = S.openMonths || new Set(); S.openMonths.add(fail.month); showMonthOps(fail.month); if (!done.length) showNote(`Не закрыт: ${sealFailTxt(fail.month, fail.problems)}.`); }
   if (done.length) { showNote(done.length > 1 ? `Закрыто: ${mLabel(done[0])} – ${mLabel(done[done.length - 1])}.` : `${mLabel(done[0])} закрыт.`); if (!fail) showCloseSummary(done); }
 });
 RENDER.alerts = function () {
@@ -7531,8 +7539,9 @@ document.addEventListener("click", async ev => {
   S.closeRes = null;
   const ok = await act(c ? "Закрываю месяц…" : "Принимаю изменения…", () => {
     const res = W.closeMonth(S.book, m, { reseal: !!r, now: nowStr(), scope: "month" });   // выписки, начатые после месяца, его итоги не меняют
-    if (!res.ok) { S.closeRes = { month: m, problems: res.problems }; return false; }
+    if (!res.ok) { S.closeRes = { month: m, problems: res.problems }; logEv(r ? "reseal-fail" : "close-fail", `${m} ${probKinds(res.problems)}`); return false; }
   });
+  if (S.closeRes && S.closeRes.month === m) showNote(`${c ? "Не закрыт" : "Не принят"}: ${sealFailTxt(m, S.closeRes.problems)}.`);
   draw("summary");
   if (ok && c && !S.closeRes) showCloseSummary([m]);
 });
@@ -9407,12 +9416,12 @@ document.addEventListener("click", async ev => {
   await act("Принимаю изменения…", () => {
     for (const m of months) {
       const res = W.closeMonth(S.book, m, { reseal: true, now: nowStr(), scope: "month" });
-      if (res.ok) done++; else if (!fail) fail = { month: m, problems: res.problems };
+      if (res.ok) done++; else { logEv("reseal-fail", `${m} ${probKinds(res.problems)}`); if (!fail) fail = { month: m, problems: res.problems }; }
     }
     if (!done) return false;
   });
   if (fail) { S.closeRes = fail; S.openMonths = S.openMonths || new Set(); S.openMonths.add(fail.month); showMonthOps(fail.month); }
-  showNote(fail ? `Принято: ${done}. ${mLabel(fail.month)} и дальше — сначала ответьте на вопросы.` : `Изменения приняты: ${pl(done, "месяц", "месяца", "месяцев")}.`);
+  showNote(fail ? `Принято: ${done}. Не принят: ${sealFailTxt(fail.month, fail.problems)}.` : `Изменения приняты: ${pl(done, "месяц", "месяца", "месяцев")}.`);
 });
 $("sugGo").addEventListener("click", () => {
   const p = S.inputs.profile;
