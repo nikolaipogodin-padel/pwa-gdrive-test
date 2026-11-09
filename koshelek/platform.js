@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П14.15 · 09.11.2026";
+const BUILD = "П15.0 · 09.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
@@ -352,8 +352,8 @@ const css = `
 #kwDlg .btn{flex:1 1 auto}
 #kwDlg a{color:var(--accent,#0d5c6e)}
 #kwDlg details summary{cursor:pointer;font-size:.86rem;color:var(--muted,#5b6873)}
-#kwBar,#kwWarn{position:fixed;z-index:70;left:8px;right:8px;bottom:calc(var(--tabh,58px) + env(safe-area-inset-bottom,0px) + 12px);background:var(--ink,#14212b);color:var(--bg,#fff);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:.9rem;box-shadow:0 8px 24px rgb(0 0 0/.3)}
-#kwBar button,#kwWarn button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:8px 14px;min-height:38px;background:var(--surface,#fff);color:var(--accent,#0d5c6e);cursor:pointer}
+#kwBar,#kwWarn,#kwStale{position:fixed;z-index:70;left:8px;right:8px;bottom:calc(var(--tabh,58px) + env(safe-area-inset-bottom,0px) + 12px);background:var(--ink,#14212b);color:var(--bg,#fff);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:.9rem;box-shadow:0 8px 24px rgb(0 0 0/.3)}
+#kwBar button,#kwWarn button,#kwStale button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:8px 14px;min-height:38px;background:var(--surface,#fff);color:var(--accent,#0d5c6e);cursor:pointer}
 `;
 let dlg = null, pill = null, bar = null;
 const STATE_LABEL = { off: "Не подключён", ok: "Синхронизировано", pending: "Ждёт отправки", sync: "Синхронизация…", error: "Ошибка Диска", offline: "Нет сети", login: "Нужен вход", conflict: "Конфликт" };
@@ -389,6 +389,18 @@ function renderWarn() {
     el("span", { style: "display:flex;gap:6px" }, el("button", { type: "button", onclick: () => openConn() }, "Подключить"), el("button", { type: "button", onclick: () => { ls.set(lk("kw_nodrv_until"), String(Date.now() + 7 * 864e5)); renderWarn(); } }, "Позже")));
   document.body.append(warn);
 }
+/* П15.0 (R6): сборка страницы и platform.js должны совпадать; иначе плашка «Обновите страницу» */
+let stale = null;
+function renderStale() {
+  const idx = window.KW_INDEX_BUILD;
+  if (idx === BUILD || !document.body) { if (stale && idx === BUILD) { stale.remove(); stale = null; } return; }
+  if (stale) return;
+  stale = el("div", { id: "kwStale" }, el("span", null, "Страница и программа из разных версий. Обновите страницу."),
+    el("button", { type: "button", onclick: async () => { try { const ks = await caches.keys(); await Promise.all(ks.filter(k => k.startsWith("koshelek")).map(k => caches.delete(k))); const rg = await navigator.serviceWorker?.getRegistration(); await rg?.update(); } catch (e) { } location.reload(); } }, "Обновить"));
+  document.body.append(stale);
+  plog("stale", "index=" + (idx || "нет") + " platform=" + BUILD);
+}
+renderStale(); addEventListener("DOMContentLoaded", renderStale); setTimeout(renderStale, 3000);
 const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 function stepBox(n, title, done, tag, body) {
   return el("div", { class: "st" + (done === true ? " done" : "") }, el("div", { class: "hd" }, el("h3", null, n + ". " + title), el("span", { class: "tag" + (done === true ? " ok" : done === "bad" ? " bad" : "") }, tag)), body);
