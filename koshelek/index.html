@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.2б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.2в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -1267,6 +1267,11 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 #p-in .imp .drop { display: flex; align-items: center; gap: 10px; padding: 8px 10px; } #p-in .imp .drop .btn { min-height: 44px; font-size: var(--fs-m); padding: 8px 14px; flex: none; }
 #p-in .imp .drop > span { font-size: var(--fs-s); line-height: 1.3; }
 #p-in .in-row { gap: 8px; } #p-in .in-row .btn.primary { min-height: 44px; } #p-in .in-row .drop { padding: 4px 6px; } #inDropText { display: none; }
+#p-in .in-row .drop.has { padding: 4px 8px 4px 12px; } #p-in .in-row .drop.has #inDropText { display: block; font-size: var(--fs-s); color: var(--ink); font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#inPickX { display: none; flex: none; min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; }
+#p-in .in-row .drop.has #inPickX { display: inline-block; }
+#p-in .in-row .drop.has .filebtn { display: none; }
+.prop-none { display: grid; gap: 8px; padding: 12px; background: var(--warn-soft, #faf0d7); border-radius: 12px; }
 /* П13.10: раскрытые «Наличные сейчас» — один блок с рамкой, секции разделены линиями */
 .cash-wrap { display: flex; flex-direction: column; }
 .cash-wrap:has(> .cash-tile[aria-expanded="true"]) { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 0 14px; }
@@ -1522,7 +1527,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <textarea id="inText" rows="2" aria-label="Траты текстом или голосом" placeholder="Rimi 23,40; бензин 60; наличными рынок 15"></textarea>
       <div class="in-row"><div class="drop" id="inDrop" tabindex="0">
         <span id="inDropText">Скриншоты или фото чеков.</span>
-        <label class="btn filebtn">Фото<input id="inFile" type="file" accept="image/*" multiple class="vh"></label>
+        <label class="btn filebtn">Фото<input id="inFile" type="file" accept="image/*" multiple class="vh"></label><button type="button" id="inPickX" aria-label="Убрать фото">✕</button>
       </div>
         <span class="inline"><button class="btn keep" type="button" id="inStop" hidden>Стоп</button><button class="btn primary" type="submit" id="inGo">Добавить траты</button></span></div>
       <span class="small muted" id="inMsg" aria-live="polite"></span>
@@ -1530,7 +1535,8 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div id="propBox" hidden>
       <div class="prop-src" id="propSrc"></div>
       <div class="ops" id="propList"></div>
-      <div class="row prop-actions"><span class="small muted" id="propMsg" aria-live="polite"></span><button class="btn primary" type="button" id="propSave">Сохранить выбранные</button></div>
+      <div class="prop-none" id="propNone" hidden><span id="propNoneT"></span><button class="btn primary" type="button" id="propClose">Ничего не добавлять</button></div>
+      <div class="row prop-actions"><span class="small muted" id="propMsg" aria-live="polite"></span><button class="btn" type="button" id="propDrop">Отмена</button><button class="btn primary" type="button" id="propSave">Сохранить выбранные</button></div>
     </div>
     <details class="up-hist" id="upBox" hidden><summary id="upH">Загруженные выписки</summary><div class="ops" id="upList"></div></details>
     <h2 class="sub-h prelim-h" id="prelimH" hidden><span>Учтены, ожидают выписку<small style="display:block;font-weight:400;font-size:.8em;color:var(--muted)">Уже в итогах; запись из выписки заменит их без дубля</small></span><span class="num" id="prelimSum"></span></h2>
@@ -10234,11 +10240,12 @@ function setPicked(fs) {
   S.picked = fs.length ? fs : null;
   $("inDrop").classList.toggle("has", !!fs.length);
   const kb = Math.max(1, Math.round(fs.reduce((a, f) => a + (f.size || 0), 0) / 1024));
-  $("inDropText").textContent = !fs.length ? IN_DROP : fs.length === 1 ? (fs[0].name || "Фото из буфера") : `${fs.length} фото · ${kb} КБ`;
+  $("inDropText").textContent = !fs.length ? IN_DROP : "📎 " + (fs.length === 1 ? (fs[0].name || "Фото из буфера") : `${fs.length} фото · ${kb} КБ`);
   $("inDropText").title = fs.map(f => f.name || "из буфера").join(", ");
   if (typeof inState === "function") inState();
 }
 $("inFile").addEventListener("change", () => setPicked([...($("inFile").files || [])]));
+$("inPickX").addEventListener("click", () => { $("inFile").value = ""; setPicked(null); });
 document.addEventListener("paste", ev => {
   if ($("p-in").hidden || ["TEXTAREA", "INPUT"].includes(ev.target.tagName) && !ev.clipboardData?.files?.length) return;
   const item = [...(ev.clipboardData?.items || [])].find(i => i.kind === "file" && /^image\//.test(i.type));
@@ -10394,7 +10401,7 @@ function inState() {
   if (S.busy && $("inGo").classList.contains("working")) return;
   const done = !!(S.props && S.props.length) && S.inSig === inSig();
   $("inForm").classList.toggle("parsed", done);
-  if (!$("inGo").classList.contains("working")) { $("inGo").disabled = done; $("inGo").textContent = done ? "Разобрано ✓" : "Добавить траты"; }
+  if (!$("inGo").classList.contains("working")) { $("inGo").disabled = done; $("inGo").textContent = done ? "Разобрано ✓" : S.picked ? "Разобрать фото" : "Добавить траты"; }
 }
 { const rp = RENDER.props; RENDER.props = function () { rp(); inState(); }; }
 $("inText").addEventListener("input", inState);
@@ -10520,6 +10527,16 @@ async function runIntake(useAI = false) {
   aiUnlock();
   $("inGo").disabled = false; $("inGo").classList.remove("working"); $("inStop").hidden = true;
 }
+function propNoneDraw() {
+  const n = S.props.length, on = S.props.filter(p => p.on).length, dups = S.props.filter(p => p.dupBank || (p.dupManual && !p.dupManual.near)).length;
+  const none = n > 0 && !on;
+  $("propNone").hidden = !none; $("propSave").disabled = none;
+  if (none) $("propNoneT").textContent = dups === n ? `Все ${n} уже есть в выписке или внесены — добавлять нечего.` : "Ни одна запись не отмечена. Отметьте нужные или закройте.";
+}
+function propDismiss() { logEv("prop-dismiss", `${S.props.length} записей, отмечено ${S.props.filter(p => p.on).length}`); S.props = []; draw("props"); $("inText").value = ""; $("inFile").value = ""; setPicked(null); saveDraft(); $("inMsg").className = "small muted"; $("inMsg").textContent = "Ничего не добавлено."; $("propMsg").textContent = ""; }
+$("propClose").addEventListener("click", propDismiss); $("propDrop").addEventListener("click", propDismiss);
+{ const rp2 = RENDER.props; RENDER.props = function () { rp2(); propNoneDraw(); }; }
+document.addEventListener("change", ev => { if (ev.target.closest("#propList")) setTimeout(() => { S.props.forEach((_, i) => { try { readProp(i); } catch (e) { /* строка перерисована */ } }); propNoneDraw(); }, 0); });
 $("propSave").addEventListener("click", async () => {
   S.props.forEach((_, i) => readProp(i));
   const sel = S.props.filter(p => p.on);
