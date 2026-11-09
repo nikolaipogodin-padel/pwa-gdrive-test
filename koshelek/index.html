@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.0б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.0в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -688,6 +688,8 @@ body.nostmt .tabbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .trial td.t-cp { white-space: normal; text-align: left; min-width: 140px; }
 .imp .tablewrap { box-shadow: none; border: 1px solid var(--line); }
 .reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+#impBox .reasons { margin: 10px 0 14px; }
+#impBox .imp-sum { margin-bottom: 4px; }
 .reasons li { padding: 10px 12px; border-radius: var(--r-s); background: var(--warn-soft); font-size: var(--fs-m); display: grid; gap: 6px; }
 .reasons li.bad { background: var(--bad-soft); }
 .reasons li.info { background: var(--accent-soft); }
@@ -6016,13 +6018,15 @@ function autoSeal() {
   const meta = st.closed_meta || {}, auto = Object.keys(st.closed_totals).filter(m => !meta[m] || meta[m].auto);
   if (!auto.length) return 0;
   const drift = new Set(W.closedDrift(S.book).map(x => x.month));
-  let n = 0;
+  let n = 0; const fails = {};   // П15.0в: одна строка журнала за проход (раньше — по строке на месяц и на каждое действие: 26% журнала)
   for (const m of auto.sort()) {
     if (!drift.has(m)) continue;
     const res = W.closeMonth(S.book, m, { reseal: true, now: nowStr(), scope: "month" });
     if (res.ok) { st.closed_meta[m].auto = true; n++; }
-    else { const key = m + probKinds(res.problems); if (S._sealFail !== key) { S._sealFail = key; logEv("autoseal-fail", `${m} ${probKinds(res.problems)}`); } }
+    else for (const k of new Set(probKinds(res.problems).split(",").map(x => x.replace(/:\d+$/, "")))) (fails[k] = fails[k] || []).push(m);
   }
+  const fk = Object.keys(fails).map(k => `${k}×${fails[k].length} (${fails[k][0]}…${fails[k][fails[k].length - 1]})`).join("; ");
+  if (fk && S._sealFail !== fk) { S._sealFail = fk; logEv("autoseal-fail", fk); } else if (!fk) S._sealFail = "";
   if (n) logEv("autoseal", String(n));
   return n;
 }
@@ -6515,7 +6519,7 @@ RENDER.alerts = function () {
   // П10 (7.3): месяцы закрываются сами (autoClose); на экране — не больше одной плашки, самая важная
   $("alerts").innerHTML = items.slice(0, 1).join("");
   /* П15.0б: какая плашка показана (без сумм) — видно, что человека отвлекает и что он игнорирует */
-  try { const tx = (items[0] || "").replace(/<[^>]+>/g, " ").replace(/[\d\s,.€−+-]{3,}/g, " # ").replace(/\s+/g, " ").trim().slice(0, 70); if (tx !== S._alLog) { S._alLog = tx; if (tx) logEv("alert", tx + " @" + (S.tab || "")); } } catch (e) { }
+  try { const tx = (items[0] || "").replace(/<[^>]+>/g, " ").replace(/\d{1,3}(?:[\s\u00a0]\d{3})*,\d{2}\s*€|\d+[,.]\d{2}\s*€/g, "# €").replace(/\s+/g, " ").trim().slice(0, 140); if (tx !== S._alLog) { S._alLog = tx; if (tx) logEv("alert", tx + " @" + (S.tab || "")); } } catch (e) { }
 };
 document.addEventListener("click", ev => {
   if (ev.target.closest("[data-save]")) saveAgain();
@@ -8387,7 +8391,7 @@ async function confirmGroups(keys, opt = {}) {
       const c = choiceOf(x);
       if (!readyChoice(c)) continue;
       const t = c.type === "Возврат" ? "Расход" : c.type;
-      if (refundBlocked(x, c)) { blocked.push(x.name); logEv(c.conf !== "user" && c.by === "Claude" ? "ai-skip" : "refund-block", "приход без покупки: " + String(x.name).slice(0, 30)); continue; }   // П13.13, П14.3
+      if (refundBlocked(x, c)) { blocked.push(x.name); const lk = (c.conf !== "user" && c.by === "Claude" ? "ai-skip" : "refund-block") + x.name; (S._rbLog = S._rbLog || new Set()); if (!S._rbLog.has(lk)) { S._rbLog.add(lk); logEv(c.conf !== "user" && c.by === "Claude" ? "ai-skip" : "refund-block", "приход без покупки: " + String(x.name).slice(0, 30)); } continue; }   // П13.13, П14.3
       if (!catOK(c) && !(rd?.categories || []).some(k => k.type === t && k.group === c.group && k.sub === c.sub)) { rd = rd || clone(S.book.rules); rd.categories = (rd.categories || []).concat([{ type: t, group: c.group, sub: c.sub }]); }
       let marker = c.rule ? validMarker(x, c.marker) : "";
       if (marker && c.conf !== "user" && c.by === "Claude") marker = strongMarker(x.name, marker, new Set(x.ops.map(o => o.id)), null, c, cpText(x.ops[0]));
