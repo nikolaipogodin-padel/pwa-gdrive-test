@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.0 · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.0б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -70,7 +70,9 @@ h3 { font-size: var(--fs-m); font-weight: 600; margin: 0; }
   font-size: var(--fs-m); font-weight: 500; background: var(--accent-soft); color: var(--ink); box-shadow: 0 4px 16px rgb(0 0 0 / .08); }
 .busy::before, .spin::before, .btn.working::before, .run::before { content: ""; flex: none; width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--accent); border-right-color: transparent; display: inline-block; }
 .busy.note::before { display: none; }
-.busy.note { background: var(--ok-soft); }
+.busy.note { background: var(--ok-soft); color: var(--ink); }
+.cat-name .cat-hint { font-size: var(--fs-s); font-weight: 400; opacity: .85; }
+.cat-name .cat-hint::before { content: "· "; }
 @media (prefers-reduced-motion: no-preference) { .busy::before, .spin::before, .btn.working::before, .run::before { animation: spin .8s linear infinite; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .run { display: flex; align-items: center; gap: 8px; }
@@ -5635,7 +5637,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* журнал работы (meta/log, личный раздел): нажатия, вкладки, действия с длительностью, обращения к ИИ, ошибки.
    Сумм, названий и текстов операций нет. Нужен, чтобы разбирать, где человек застревает. Пишется не чаще раза в 20 с и при уходе со страницы. */
-const LOG = { ev: [], learn: [], corr: [], dirty: false, timer: null };
+const LOG = { ev: [], learn: [], corr: [], dirty: false, timer: null, t0: 0, t1: 0, ses: Date.now().toString(36).slice(-5) };   // П15.0б: ses — номер сеанса; t0/t1 — время двух последних нажатий (пауза перед решением)
 function logEv(k, d) {
   LOG.ev.push([new Date().toISOString().slice(0, 19), k, d == null ? "" : String(d).slice(0, 160)]);
   if (LOG.ev.length > 2000) LOG.ev.splice(0, LOG.ev.length - 2000);   // П14.12: 500 → 2000
@@ -5659,7 +5661,7 @@ document.addEventListener("click", ev => {
   /* П14.12: какая кнопка, как называется, на каком экране; повтор той же кнопки подряд — одной записью с «×N» */
   const dl = document.querySelector("dialog[open]"), ctx = (S.tab || "") + (dl ? "/" + (dl.id || "dlg") : "");
   const det = key + (txt && txt !== key ? " «" + txt.slice(0, 24) + "»" : "") + " @" + ctx;
-  const nowT = Date.now(), lc = LOG.lastClick;
+  const nowT = Date.now(), lc = LOG.lastClick; LOG.t0 = LOG.t1; LOG.t1 = nowT;
   if (lc && lc.det === det && nowT - lc.t < 4000 && LOG.ev[lc.i] && LOG.ev[lc.i][1] === "click" && String(LOG.ev[lc.i][2]).startsWith(det)) { lc.n++; lc.t = nowT; LOG.ev[lc.i][2] = det + " ×" + lc.n; LOG.dirty = true; return; }
   logEv("click", det); LOG.lastClick = { det, t: nowT, n: 1, i: LOG.ev.length - 1 };
 }, true);
@@ -5805,7 +5807,7 @@ function logCorr(item, prev) {
       ai: item.ai_was ? (item.ai_was.g || "") + "/" + (item.ai_was.s || "") : "", why: String(item.why || "").slice(0, 120),
       rule: item.make_rule ? String(item.marker || "").slice(0, 40) : "", dir: item.rule_dir || "", n: 1,
       cp: cleanInfo(item.cp).slice(0, 50), d: o ? infoTxt(o.info).slice(0, 140) : "", pt: o ? payKind(o.pt) : "", mon: item.month || "",
-      opid: op, rep: LOG.corr.filter(c => c.opid === op).length, prevsrc: prev ? (prev.src || prev.via || "") : "" });
+      opid: op, rep: LOG.corr.filter(c => c.opid === op).length, prevsrc: prev ? (prev.src || prev.via || "") : "", lat: LOG.t0 ? Math.min(600, Math.round((LOG.t1 - LOG.t0) / 1000)) : 0 });
     if (LOG.corr.length > 1000) LOG.corr.splice(0, LOG.corr.length - 1000);
     LOG.dirty = true; if (!LOG.timer) LOG.timer = setTimeout(flushLog, 20000);
   } catch (e) { }
@@ -6134,7 +6136,7 @@ const use = n => (window.claude?.use ? window.claude.use(n).catch(() => null) : 
   }
   catch (e) { $("updated").textContent = e?.code === "revoked" ? "Доступ к данным закрыт." : "Ошибка чтения данных [" + (e?.code || "?") + "]. Обновите страницу."; return; }
   const meta = raw.meta || {};
-  LOG.ev = ((meta.log && meta.log.events) || []).slice(-2000); LOG.learn = ((meta.log && meta.log.learn) || []).slice(-300); LOG.corr = ((meta.log && meta.log.corr) || []).slice(-1000); logEv("open", `${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
+  LOG.ev = ((meta.log && meta.log.events) || []).slice(-2000); LOG.learn = ((meta.log && meta.log.learn) || []).slice(-300); LOG.corr = ((meta.log && meta.log.corr) || []).slice(-1000); logEv("open", `${LOG.ses} ${APP_VERSION} ${innerWidth}px · данные ${(performance.now() / 1000).toFixed(1)} с`);
   S.inputs = { profile: meta.profile || null, state: meta.state || null, rules: meta.rules || null, journal: raw.journal, edits: raw.edits, cash: raw.cash, pending: raw.pending, uploads: raw.uploads, suggest: meta.suggest || { items: {} } };
   S.saveId = meta.state ? meta.state.save_id || null : null;
   for (const c of COLS) for (const [id, doc] of Object.entries(raw[c])) S.saved.set(c + "/" + id, sig(doc));
@@ -6512,6 +6514,8 @@ RENDER.alerts = function () {
   if (S.tab === "ops") for (const g of statementGaps().slice(0, 3)) add("warn", `Нет выписки ${esc(acctLabel(g.acct))} за ${fmtFull(g.from)} – ${fmtFull(g.to)}.`, ["in", "Загрузить"]);
   // П10 (7.3): месяцы закрываются сами (autoClose); на экране — не больше одной плашки, самая важная
   $("alerts").innerHTML = items.slice(0, 1).join("");
+  /* П15.0б: какая плашка показана (без сумм) — видно, что человека отвлекает и что он игнорирует */
+  try { const tx = (items[0] || "").replace(/<[^>]+>/g, " ").replace(/[\d\s,.€−+-]{3,}/g, " # ").replace(/\s+/g, " ").trim().slice(0, 70); if (tx !== S._alLog) { S._alLog = tx; if (tx) logEv("alert", tx + " @" + (S.tab || "")); } } catch (e) { }
 };
 document.addEventListener("click", ev => {
   if (ev.target.closest("[data-save]")) saveAgain();
@@ -7032,7 +7036,7 @@ function homeCats(f, k) {
     return `<li class="cat${cls ? " " + cls : ""}${isLeft && list.length > 1 ? " sep" : ""}" data-big="${esc(r.big)}">
       <button class="cat-btn" type="button" aria-expanded="${open}" aria-controls="cd${i}" aria-label="${esc(aria)}">
         <span class="cat-name">${esc(isLeft ? (past ? "Осталось" : "Останется") : r.big)}</span><span class="cat-val">${val}</span>
-        <span class="bl" aria-hidden="true">${band}${bars}<i class="tick" style="left:${P(u)}%"></i></span></button>
+        <span class="bl" aria-hidden="true">${band}${bars}${u > 0 ? `<i class="tick" style="left:${P(u)}%"></i>` : ""}</span></button>
       <div class="cat-det" id="cd${i}"${open ? "" : " hidden"}>${open ? catDetail(r, f, k) : ""}</div></li>`;
   }).join("");
   // П10.4 (10): списания без категории не прячутся — отдельная строка «Не определено» (в «Потрачено» и % не входят)
@@ -7042,7 +7046,7 @@ function homeCats(f, k) {
     if (fb.length) $("hCats").insertAdjacentHTML("afterbegin", `<li class="cat undef" data-big="fb"><button class="cat-btn" type="button" data-unver="fb" aria-label="${esc(`Запасная категория без проверки: ${pl(fb.length, "списание", "списания", "списаний")} на ${eur(fs)} €, в расходы входят`)}"><span class="cat-name">Запасная категория · проверить</span><span class="cat-val">${E0(fs)}<small>${fb.length} опер.</small></span></button></li>`);
   }
   if (un.length) {
-    const li = `<li class="cat undef" data-big="❓"><button class="cat-btn" type="button" data-undef="1" aria-label="${esc(`Не определено: ${pl(un.length, "списание", "списания", "списаний")} на ${eur(us)} €, в расходы не входят`)}"><span class="cat-name">Не определено · уточнить</span><span class="cat-val">${E0(us)}<small>${un.length} опер.</small></span></button></li>`;
+    const li = `<li class="cat undef" data-big="❓"><button class="cat-btn" type="button" data-undef="1" aria-label="${esc(`Не определено: ${pl(un.length, "списание", "списания", "списаний")} на ${eur(us)} €, в расходы не входят`)}"><span class="cat-name">Не определено<small class="cat-hint">уточнить</small></span><span class="cat-val">${E0(us)}<small>${un.length} опер.</small></span></button></li>`;
     $("hCats").insertAdjacentHTML("afterbegin", li);   // П11.6.2: «Не определено» — первой строкой
   }
 }
@@ -9751,7 +9755,8 @@ async function impPick(file, batch = false) {
     if (!S.impWait) { S.impWait = true; waitIdle(60000).then(() => { S.impWait = false; const f = S.impQueue.shift(); if (f) impPick(f, batch); }); }
     draw("imp"); return;
   }
-  const imp = S.imp = { name: file.name || "statement.csv", size: file.size, stage: "reading", batch };
+  const imp = S.imp = { name: file.name || "statement.csv", size: file.size, stage: "reading", batch, t0: performance.now() };
+  logEv("imp-start", `${Math.max(1, Math.round((file.size || 0) / 1024))} КБ${batch ? " пакет" : ""}${S.impQueue.length ? " · в очереди " + S.impQueue.length : ""}`);
   $("impDrop").classList.add("has"); draw("imp");
   try {
     const r = await readStatement(file);
@@ -9760,7 +9765,7 @@ async function impPick(file, batch = false) {
     await impLearn();
     if (S.imp !== imp) return;
     await impAuto();
-  } catch (e) { if (S.imp !== imp) return; imp.stage = "error"; imp.error = e?.message || String(e); draw("imp"); if (imp.batch && onbStep() === 1) await wizStall(); }   // П14.11: ошибка чтения файла в мастере раньше не показывалась — экран оставался «Читаю файл…»
+  } catch (e) { if (S.imp !== imp) return; imp.stage = "error"; imp.error = e?.message || String(e); logEv("imp-err", String(imp.error).slice(0, 100)); draw("imp"); if (imp.batch && onbStep() === 1) await wizStall(); }   // П14.11: ошибка чтения файла в мастере раньше не показывалась — экран оставался «Читаю файл…»
 }
 async function impLearn(opts = {}) {
   const imp = S.imp; if (!imp) return;
@@ -9771,7 +9776,7 @@ async function impLearn(opts = {}) {
       ask: opts.claude ? ask : null, withTools: !!opts.withTools, state: opts.claude ? imp.learn : null, hint: opts.hint || "" });
     imp.learn = res;
     if (res.status === "known") impPreview(res.format);
-    else imp.stage = res.status;
+    else { imp.stage = res.status; logEv("imp-stage", res.status + (res.message ? " · " + String(res.message).replace(/[\d.,]{4,}/g, "#").slice(0, 100) : "")); }
   } catch (e) { imp.stage = "error"; imp.error = e?.message || String(e); }
   imp.working = false; draw("imp");
   if (imp.batch && onbStep() === 1) await wizStall();
@@ -9835,6 +9840,7 @@ function impPreview(format) {
   const imp = S.imp;
   imp.preview = W.previewImport(S.book, imp.input, { fileName: imp.name, now: nowStr(), format: format || "auto", assumeOwn: true });   // П11-2: выписку загрузил человек — счёт свой, без вопроса
   imp.stage = "preview";
+  try { const pv = imp.preview; logEv("imp-preview", `${pv.status} · ${(pv.reasons || []).map(r => r.code).join(",") || "без замечаний"} · в файле ${pv.counts?.in_file ?? "?"}, возможных дублей ${(pv.probable_duplicates || []).length}${pv.known_account ? "" : " · новый счёт"} ${Math.round(performance.now() - (imp.t0 || performance.now()))} мс`); } catch (e) { }
   imp.dec = { confirm: false, new_account: !!imp.preview.known_account, skip: new Set((imp.preview.probable_duplicates || []).map(d => d.new_id)), closing: "" };
 }
 async function impConfirmFormat() {
@@ -9877,6 +9883,7 @@ async function impCommit() {
   });
   if (ok) {
     S.impDone.push({ name: imp.name, period: pv.period, added: res.added, skipped: res.skipped?.length || 0, q: res.new_questions?.length || 0 });
+    logEv("imp-commit", `новых ${res.added}, пропущено ${res.skipped?.length || 0}, вопросов ${res.new_questions?.length || 0}${pv.status === "needs_confirmation" ? " · с подтверждением" : ""}${dec.new_account ? " · новый счёт" : ""} ${Math.round(performance.now() - (imp.t0 || performance.now()))} мс`);
     impNext();
   }
 }
@@ -11506,7 +11513,7 @@ document.addEventListener("click", async ev => {
 <script>
 document.addEventListener("click",ev=>{if(ev.target.closest("#kwConn"))window.KOSHELEK.openConn()});
 /* П14.12: журнал для разработчика — общий состав для «Скопировать» (коротко) и «Сохранить файлом» (полностью) */
-function kwJournal(full){const K=window.KOSHELEK,p=(typeof profile==="function"&&profile())||{};const cr=l=>l.map(({k,...r})=>r);return{schema:2,app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,tab:(typeof S!=="undefined"&&S.tab)||"",sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),cfg:{tier:(typeof aiTier==="function"?aiTier():""),hist:p.hist||"",onb:p.onb||0,consent:p.consent||null},docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),auto:(window.kwAutoStat?window.kwAutoStat():null),legend:"corr — правки категорий: t время, scr вкладка, via/src/chk откуда была категория и как подтверждена, from→to было→стало, ai что предлагал ИИ (если выбрали другое), why пояснение ИИ, rule правило (если создано), cp контрагент, d описание без дат/чисел/IBAN, pt способ оплаты, mon месяц, opid хеш операции, rep какая по счёту правка этой операции, prevsrc откуда была прошлая правка, n сколько операций затронуто. log — события: click «кнопка «подпись» @вкладка/окно ×повторов подряд»",corr:cr(full?LOG.corr:LOG.corr.slice(-60)),log:full?LOG.ev:LOG.ev.slice(-200),learn:full?(LOG.learn||[]):(LOG.learn||[]).slice(-150)}}
+function kwJournal(full){const K=window.KOSHELEK,p=(typeof profile==="function"&&profile())||{};const cr=l=>l.map(({k,...r})=>r);return{schema:2,app:"Кошелёк Телефон",ver:APP_VERSION+" / "+K.build,at:new Date().toISOString(),ua:navigator.userAgent,w:innerWidth,standalone:matchMedia("(display-mode: standalone)").matches,tab:(typeof S!=="undefined"&&S.tab)||"",sync:K.Sync.state+" "+K.Sync.msg,rev:K.kv.baseRev,dirty:K.kv.dirty,ai:!!K.AI.key(),cfg:{tier:(typeof aiTier==="function"?aiTier():""),hist:p.hist||"",onb:p.onb||0,consent:p.consent||null},docs:K.mem.size,ops:(typeof allOps==="function"?allOps().length:null),auto:(window.kwAutoStat?window.kwAutoStat():null),legend:"corr — правки категорий: t время, scr вкладка, via/src/chk откуда была категория и как подтверждена, from→to было→стало, ai что предлагал ИИ (если выбрали другое), why пояснение ИИ, rule правило (если создано), cp контрагент, d описание без дат/чисел/IBAN, pt способ оплаты, mon месяц, opid хеш операции, rep какая по счёту правка этой операции, prevsrc откуда была прошлая правка, n сколько операций затронуто. log — события: click «кнопка «подпись» @вкладка/окно ×повторов подряд»; open — номер сеанса, версия, ширина; imp-start/imp-preview/imp-commit/imp-stage/imp-err — загрузка выписки (размер, статус проверки, коды замечаний, число операций/дублей/вопросов, мс); alert — какая плашка показана; lat у corr — секунд между двумя последними нажатиями (пауза перед решением)",corr:cr(full?LOG.corr:LOG.corr.slice(-60)),log:full?LOG.ev:LOG.ev.slice(-200),learn:full?(LOG.learn||[]):(LOG.learn||[]).slice(-150)}}
 document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLogFile");if(!b)return;const old=b.textContent;let done=false;try{const txt=JSON.stringify(kwJournal(true)),name="koshelek-zhurnal-"+new Date().toISOString().slice(0,16).replace(/[-:T]/g,"")+".json",f=new File([txt],name,{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:"Журнал Кошелька"});b.textContent="Готово";done=true}catch(e){if(e&&e.name==="AbortError"){b.textContent=old;return}}}if(!done){const u=URL.createObjectURL(f),a=document.createElement("a");a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);b.textContent="Файл сохранён ("+Math.round(txt.length/1024)+" КБ)"}}catch(e){b.textContent="Не удалось сохранить"}setTimeout(()=>b.textContent=old,4000)});
 document.addEventListener("click",async ev=>{const b=ev.target.closest("#kwLog");if(!b)return;const txt=JSON.stringify(kwJournal(false));const old=b.textContent;try{await navigator.clipboard.writeText(txt);b.textContent="Скопировано ("+Math.round(txt.length/1024)+" КБ) — вставьте в чат"}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.append(t);t.select();try{document.execCommand("copy");b.textContent="Скопировано — вставьте в чат"}catch(e2){b.textContent="Не удалось скопировать"}t.remove()}setTimeout(()=>b.textContent=old,4000)});
 window.addEventListener("koshelek-ai",async()=>{try{S.sample=await window.claude.use("sample");if(S.inputs&&typeof drawAll==="function")drawAll()}catch(e){}});
