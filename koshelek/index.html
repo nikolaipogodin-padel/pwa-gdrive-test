@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.1 · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.1б · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -269,6 +269,10 @@ dialog::backdrop { background: rgb(10 20 26 / .45); }
 .home-head { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
 .mnav { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .mnav h2 { margin: 0; white-space: nowrap; }
+/* П15.1 (R12): выбор месяца списком — касание названия открывает список (раньше до начала истории ≈30 нажатий ‹) */
+.mpick { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.mpick select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: pointer; }
+.mpick:has(select:not([hidden])) h2::after { content: " ▾"; color: var(--accent); font-size: .8em; }
 #hdrMonth { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
 #hdrMonth[hidden] { display: none; }
 #hdrMonth .home-head { flex-wrap: nowrap; gap: 4px 10px; }
@@ -1395,7 +1399,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <div class="ln-dock"><div class="ln-btns"><button type="button" class="btn primary" id="lnSave" disabled>Сохранить и далее</button><button type="button" class="btn" id="lnSkip">Пропустить</button></div><p class="ln-aux" id="lnAux">Отвечать на все строки необязательно</p></div>
     </section>
     <div class="home-head">
-      <div class="mnav"><button type="button" class="mnav-b keep" id="hPrev" aria-label="Предыдущий месяц" hidden>‹</button><h2 id="fcTitle">Главная</h2><button type="button" class="mnav-b keep" id="hNext" aria-label="Следующий месяц" hidden>›</button></div>
+      <div class="mnav"><button type="button" class="mnav-b keep" id="hPrev" aria-label="Предыдущий месяц" hidden>‹</button><span class="mpick"><h2 id="fcTitle">Главная</h2><select id="hPick" aria-label="Выбрать месяц" hidden></select></span><button type="button" class="mnav-b keep" id="hNext" aria-label="Следующий месяц" hidden>›</button></div>
       <span class="hl"><span class="small muted" id="fcSub"></span><button type="button" class="mini go-btn keep" id="hNow" hidden>К текущему</button></span>
     </div>
     <p class="note" id="fcLow" hidden></p>
@@ -7295,12 +7299,22 @@ function homeForecast() {
   return S.homeF;
 }
 const HF = () => S.homeF || S.forecast;
-function homeGo(step) {
-  const ms = navMonths(), cur = S.forecast?.month, nx = nextMonth(), at = S.homeNext ? nx : S.homeMonth || cur, i = ms.indexOf(at);
-  const n = ms[i + step]; if (!n) return;
+function homeTo(n) {
+  const cur = S.forecast?.month, nx = nextMonth(); if (!n || !navMonths().includes(n)) return;
   S.homeNext = n === nx; S.homeMonth = n === cur || n === nx ? null : n; S.homeF = null; S.openCats = new Set();
   draw("forecast");
 }
+function homeGo(step) {
+  const ms = navMonths(), cur = S.forecast?.month, nx = nextMonth(), at = S.homeNext ? nx : S.homeMonth || cur, i = ms.indexOf(at);
+  const n = ms[i + step]; if (!n) return;
+  homeTo(n);
+}
+function hPickFill() {
+  const sel = $("hPick"), ms = navMonths(), cur = S.forecast?.month, nx = nextMonth(), at = S.homeNext ? nx : S.homeMonth || cur;
+  sel.hidden = ms.length < 3;
+  sel.innerHTML = ms.slice().reverse().map(m => `<option value="${m}"${m === at ? " selected" : ""}>${esc(monthFull(m))}${m === nx ? " · прогноз" : ""}</option>`).join("");
+}
+$("hPick").addEventListener("change", ev => { logEv("month-pick", ev.target.value); homeTo(ev.target.value); });
 $("hPrev").addEventListener("click", () => homeGo(-1));
 $("hNext").addEventListener("click", () => homeGo(1));
 $("hNow").addEventListener("click", () => { S.homeMonth = null; S.homeNext = false; S.homeF = null; draw("forecast"); });
@@ -7317,7 +7331,7 @@ function homeNextRender() {
   $("hBody").hidden = true; $("hHead").hidden = true; $("fcLow").hidden = true; $("hNextBody").hidden = false;
   $("fcTitle").textContent = monthFull(m);
   $("fcSub").textContent = "прогноз";
-  $("hPrev").hidden = $("hNext").hidden = false; $("hPrev").disabled = false; $("hNext").disabled = true; $("hNow").hidden = false;
+  $("hPrev").hidden = $("hNext").hidden = false; $("hPrev").disabled = false; $("hNext").disabled = true; $("hNow").hidden = false; hPickFill();
   const pl0 = (profile()?.forecast?.planned || []).map((x, i) => ({ x, i })).filter(({ x }) => x.month === m);
   const rows = (f?.rows || []).filter(r => r.big !== "Осталось");
   const inc = fin(f?.income_base) || fin(cur?.income_avg), tot = cents(rows.reduce((a, r) => a + fin(r.fc), 0)), left = cents(inc - tot);
@@ -7377,7 +7391,7 @@ RENDER.forecast = function () {
   const k = kpiOf(f), past = !!S.homeF, ms = homeMonths(), at = ms.indexOf(f.month);
   $("fcTitle").textContent = (MONTH_NAMES[+String(f.month).slice(5) - 1] || f.month) + " " + String(f.month).slice(0, 4);
   $("hPrev").hidden = $("hNext").hidden = navMonths().length < 2;
-  $("hPrev").disabled = at <= 0; $("hNext").disabled = !past && !nextMonth();
+  $("hPrev").disabled = at <= 0; $("hNext").disabled = !past && !nextMonth(); hPickFill();
   $("hNow").hidden = !past;
   const ct = S.book?.state?.closed_through || "", done = fin(f.remaining_days) === 0;
   $("fcSub").textContent = past || done ? (f.month <= ct ? "итог · закрыт" : "итог месяца") : "";
@@ -9901,6 +9915,7 @@ function impPreview(format) {
   const imp = S.imp;
   imp.preview = W.previewImport(S.book, imp.input, { fileName: imp.name, now: nowStr(), format: format || "auto", assumeOwn: true });   // П11-2: выписку загрузил человек — счёт свой, без вопроса
   imp.stage = "preview";
+  imp.tPrev = performance.now();
   try { const pv = imp.preview; logEv("imp-preview", `${pv.status} · ${(pv.reasons || []).map(r => r.code).join(",") || "без замечаний"} · в файле ${pv.counts?.in_file ?? "?"}, возможных дублей ${(pv.probable_duplicates || []).length}${pv.known_account ? "" : " · новый счёт"} ${Math.round(performance.now() - (imp.t0 || performance.now()))} мс`); } catch (e) { }
   imp.dec = { confirm: false, new_account: !!imp.preview.known_account, skip: new Set((imp.preview.probable_duplicates || []).map(d => d.new_id)), closing: "" };
 }
@@ -9925,7 +9940,7 @@ async function impCommit() {
     if (!Number.isFinite(v)) { imp.msg = "Введите остаток на конец периода по данным банка — без него сверка не подтвердится."; draw("imp"); return; }
   }
   if (reasons.includes("other_account") && !dec.new_account) { imp.msg = "Подтвердите, что это ваш второй счёт, или загрузите выписку нужного счёта."; draw("imp"); return; }
-  let res = null;
+  let res = null; const tGo = performance.now(), tRead = Math.round((tGo - (imp.tPrev || imp.t0 || tGo)) / 1000);   // П15.0г: «на решение» — сколько читали проверку до нажатия
   const ok = await act("Импортирую выписку…", () => {
     const closing = reasons.includes("no_balances") ? parseFloat(String(dec.closing).replace(/\s/g, "").replace(",", ".")) : null;
     res = W.commitImport(S.book, pv, { confirm: pv.status === "needs_confirmation", new_account: dec.new_account, skip_ids: [...dec.skip], closing_balance: closing, now: nowStr() });
@@ -9944,7 +9959,7 @@ async function impCommit() {
   });
   if (ok) {
     S.impDone.push({ name: imp.name, period: pv.period, added: res.added, skipped: res.skipped?.length || 0, q: res.new_questions?.length || 0 });
-    logEv("imp-commit", `новых ${res.added}, пропущено ${res.skipped?.length || 0}, вопросов ${res.new_questions?.length || 0}${pv.status === "needs_confirmation" ? " · с подтверждением" : ""}${dec.new_account ? " · новый счёт" : ""} ${Math.round(performance.now() - (imp.t0 || performance.now()))} мс`);
+    logEv("imp-commit", `новых ${res.added}, пропущено ${res.skipped?.length || 0}, вопросов ${res.new_questions?.length || 0}${pv.status === "needs_confirmation" ? " · с подтверждением" : ""}${dec.new_account ? " · новый счёт" : ""} · запись ${Math.round(performance.now() - tGo)} мс · читали проверку ${tRead} с`);
     impNext();
   }
 }
