@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.2в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.2г · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -623,6 +623,7 @@ label.tg > span { min-width: 0; }
 .lk:last-child { border-bottom: 0; }
 #eRefBox, #rRefBox { display: grid; gap: 8px; }
 #eRefPane, #rRefPane { display: grid; gap: 8px; }
+.bal-list li.bal-why { display: block; padding: 0 0 8px; border-bottom: 1px solid var(--line); } .bal-why .small { display: block; line-height: 1.35; }
 .reflist { max-height: 38vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card, #fff); }
 .reflist .lk { padding: 8px 12px; min-height: 44px; }
 .reflist .lk span.amt { margin-left: auto; white-space: nowrap; }
@@ -6820,8 +6821,8 @@ function balData(f) {
   const accts = [];
   let bank = 0;
   for (const [a, x] of by) {
-    let pend = 0, n = 0;
-    for (const id of open) { const p = S.pending?.[id]; if (!p || p.pay === "unknown" || (p.acct || prim) !== a || (past && String(p.date) > end)) continue; pend += fin(p.amount); n++; }
+    let pend = 0, n = 0; const pl = [];
+    for (const id of open) { const p = S.pending?.[id]; if (!p || p.pay === "unknown" || (p.acct || prim) !== a || (past && String(p.date) > end)) continue; pend += fin(p.amount); n++; pl.push({ d: p.date, a: fin(p.amount), t: String(p.desc || p.sub || "").slice(0, 28) }); }
     let v, stale = false;
     if (past) {
       if (end < x.from) continue;
@@ -6829,7 +6830,7 @@ function balData(f) {
       v = cents(x.v - after - pend); stale = end > x.to;
     } else v = cents(x.v - pend);
     const c = chk[a], ok = !past && c && c.ok && Math.abs(fin(c.v) - v) < 0.005;
-    accts.push({ a, label: acctLabel(a), v, to: x.to, xv: x.v, n, pend: cents(pend), stale, ok, hid: Math.abs(v) < 0.005 && !n && !moved(a) });
+    accts.push({ a, label: acctLabel(a), v, to: x.to, xv: x.v, n, pend: cents(pend), pl, stale, ok, hid: Math.abs(v) < 0.005 && !n && !moved(a) });
     bank += v;
   }
   let uN = 0, uV = 0; for (const id of open) { const p = S.pending?.[id]; if (!p || p.pay !== "unknown" || (past && String(p.date) > end)) continue; uN++; uV += fin(p.amount); }
@@ -6853,7 +6854,8 @@ function homeBal(f) {
   $("hBalDate").hidden = B.past || !B.maxTo; $("hBalDate").textContent = B.mixed ? "по данным банка на разные даты" : B.maxTo ? `по данным банка на ${fmtFull(B.maxTo)}` : "";
   $("hBalBank").hidden = !B.accts.length;
   $("hBalBankV").textContent = eur(B.bank) + " €";
-  const row = x => `<li><span>${esc(x.label)}${x.ok ? ' <span class="bal-ok" aria-label="сходится с банком">✓</span>' : ""}</span><span class="num">${eur(x.v)} €</span></li>`;
+  const rowSub = x => !x.n ? "" : `<li class="bal-why"><span class="small muted">По выписке ${eur(x.xv)} € на ${fmtFull(x.to)}; минус ещё не пришли в выписку: ${eur(x.pend)} € (${x.n}): ${x.pl.slice(0, 5).map(q => `${esc(q.t || "запись")} ${fmtDate(q.d)} ${eur(q.a)}`).join("; ")}${x.n > 5 ? "…" : ""}.</span></li>`;
+  const row = x => `<li><span>${esc(x.label)}${x.ok ? ' <span class="bal-ok" aria-label="сходится с банком">✓</span>' : ""}</span><span class="num">${eur(x.v)} €</span></li>${rowSub(x)}`;
   const shown = B.accts.filter(x => !x.hid), hid = B.accts.filter(x => x.hid);
   $("hBalList").innerHTML = shown.map(row).join("") + (hid.length ? (S.balMore ? hid.map(row).join("") + '<li><button type="button" class="linkbtn" data-balmore="1">Свернуть</button></li>' : `<li><button type="button" class="linkbtn" data-balmore="1">Ещё ${pl(hid.length, "счёт", "счёта", "счетов")} с 0 €</button></li>`) : "");
   $("hBalCashV").textContent = B.cash ? eur(B.cash.v) + " €" + (B.cash.est ? " · по записям" : "") : "—";
