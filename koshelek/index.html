@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.0в · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.1 · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
@@ -95,6 +95,18 @@ h3 { font-size: var(--fs-m); font-weight: 600; margin: 0; }
 .al { display: flex; gap: 6px 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--r-s); font-size: var(--fs-m); background: var(--warn-soft); }
 .al.bad { background: var(--bad-soft); }
 .al.info { background: var(--accent-soft); }
+/* П15.1 (R1): предпросмотр «для всех похожих» */
+#eMarkerInfo .simlist { max-height: 220px; overflow: auto; margin: 8px 0; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--surface); }
+#eMarkerInfo .simrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: var(--fs-s); color: var(--ink); cursor: pointer; }
+#eMarkerInfo .simrow:last-child { border-bottom: 0; }
+#eMarkerInfo .simrow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#eMarkerInfo .simrow b { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+#eMarkerInfo .simrow.sus { background: var(--warn-soft); }
+#eMarkerInfo .simrow input, #eMarkerInfo .sim-sure input { width: 20px; height: 20px; accent-color: var(--accent); }
+#eMarkerInfo .sim-bar { display: flex; gap: 14px; margin-top: 6px; }
+#eMarkerInfo .sim-warn { margin-top: 6px; color: var(--worse); font-weight: 600; }
+#eMarkerInfo .sim-sure { margin-top: 8px; font-weight: 600; }
+.al-more { justify-self: start; font: inherit; font-size: var(--fs-s); font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 999px; padding: 5px 12px; min-height: 32px; cursor: pointer; }
 .al.neutral { background: var(--surface); box-shadow: var(--shadow); color: var(--ink); }
 .al .go { font: inherit; font-size: var(--fs-s); font-weight: 600; background: var(--surface); border: 0; border-radius: 999px; padding: 6px 12px; min-height: 34px; color: var(--accent); cursor: pointer; }
 details.more > summary { cursor: pointer; font-size: var(--fs-s); color: var(--muted); padding: 4px 0; }
@@ -1676,6 +1688,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div class="note" id="dlgState"></div>
     <div class="row">
       <button type="button" class="btn quiet" id="dlgUndo" hidden>Снять правку</button>
+      <button type="button" class="btn quiet" id="dlgUndoBatch" hidden>Отменить пакет</button>
       <button type="button" class="btn" id="dlgOk" hidden>Верно</button>
       <button type="button" class="btn" id="dlgCancel">Отмена</button>
       <button type="submit" class="btn primary" id="dlgSave">Сохранить</button>
@@ -6012,7 +6025,29 @@ function probKinds(ps) {
     : /^сверка не сходится/.test(p) ? "recon-mismatch" : /^❓ осталось (\d+)/.test(p) ? "q:" + RegExp.$1 : /^предварительных записей.*?: (\d+)/.test(p) ? "pending:" + RegExp.$1
     : /^перемещения или тело/.test(p) ? "moved-in-net" : /^в журнале нет операций/.test(p) ? "no-ops" : "other").join(",");
 }
-const sealFailTxt = (m, ps) => `${mLabel(m)}: ${(ps || [])[0] || "причина не определена"}${(ps || []).length > 1 ? ` (+ ещё ${ps.length - 1})` : ""}`;
+/* П15.1: причина отказа закрытия/«Принять» человеческим языком + что сделать. Движок (engine.py-паритет) не трогаем — только показ. */
+function plainProblem(p) {
+  p = String(p || "");
+  const eur = x => { const v = Math.abs(parseFloat(String(x).replace(",", "."))); return isFinite(v) ? v.toFixed(2).replace(".", ",") + " €" : String(x); };
+  let m;
+  if ((m = p.match(/^сверка не сходится: (.+?) \((.*?)\): оборот D ([+\-−]?[\d.]+), K ([+\-−]?[\d.]+), остаток на начало ([+\-−]?[\d.]+), на конец ([+\-−]?[\d.]+), файл (ок|повреждён)/))) {
+    const [, per, , d, k, o, c, f] = m, z = x => !(Math.abs(parseFloat(String(x).replace("−", "-"))) > 0.004);
+    const parts = []; if (!z(o)) parts.push(`остаток на начало отличается на ${eur(o)}`); if (!z(d)) parts.push(`списания — на ${eur(d)}`); if (!z(k)) parts.push(`поступления — на ${eur(k)}`); if (!z(c) && z(o)) parts.push(`остаток на конец — на ${eur(c)}`);
+    const start = per.split(/\s*[–-]\s*/)[0];
+    const hint = f === "повреждён" ? "Файл выписки повреждён — загрузите его заново."
+      : !z(o) ? `Скорее всего, в учёте нет операций, которые идут перед ${start}: загрузите выписку за предыдущий период.`
+      : "Скорее всего, внутри периода не хватает операций или есть лишние: загрузите выписку этого периода заново.";
+    return `Не сходится выписка ${per}: ${parts.join("; ") || "обороты расходятся"}. ${hint}`;
+  }
+  if ((m = p.match(/^данные выписок идут до (\S+), месяц заканчивается (\S+)/))) return `Выписки загружены только до ${m[1]}, а месяц заканчивается ${m[2]}. Загрузите свежую выписку.`;
+  if ((m = p.match(/^сверка не подтверждена: (.+?) \(/))) return `Выписка ${m[1]} без остатков — конечный остаток не введён, сверить нечем.`;
+  if ((m = p.match(/^предварительных записей без проводки в банке: (\d+)/))) return `${m[1]} предварительных записей ещё не появились в банке — дождитесь выписки с ними.`;
+  if ((m = p.match(/^перемещения или тело займов попали в расходы: (\d+)/))) return `${m[1]} перемещений или платежей по телу займа попали в расходы — исправьте тип.`;
+  if ((m = p.match(/^❓ осталось (\d+): (.*)$/))) return `Остались неразобранные операции (${m[1]}): ${m[2]}`;
+  if ((m = p.match(/^в журнале нет операций за (\S+)/))) return `За ${m[1]} в учёте нет операций.`;
+  return p;
+}
+const sealFailTxt = (m, ps) => `${mLabel(m)}: ${plainProblem((ps || [])[0]) || "причина не определена"}${(ps || []).length > 1 ? ` (+ ещё ${ps.length - 1})` : ""}`;
 function autoSeal() {
   const st = S.book?.state; if (!st?.closed_totals) return 0;
   const meta = st.closed_meta || {}, auto = Object.keys(st.closed_totals).filter(m => !meta[m] || meta[m].auto);
@@ -6489,9 +6524,10 @@ document.addEventListener("click", async ev => {
   if (fail) { S.closeRes = fail; S.openMonths = S.openMonths || new Set(); S.openMonths.add(fail.month); showMonthOps(fail.month); if (!done.length) showNote(`Не закрыт: ${sealFailTxt(fail.month, fail.problems)}.`); }
   if (done.length) { showNote(done.length > 1 ? `Закрыто: ${mLabel(done[0])} – ${mLabel(done[done.length - 1])}.` : `${mLabel(done[0])} закрыт.`); if (!fail) showCloseSummary(done); }
 });
+document.addEventListener("click", ev => { if (!ev.target.closest("[data-alertsmore]")) return; S.alertsAll = !S.alertsAll; draw("alerts"); });
 RENDER.alerts = function () {
   const st = S.status, items = [];
-  const add = (cls, html, go) => items.push(`<div class="al ${cls}"><span>${html}</span>${go ? `<button class="go" type="button" ${go[0] === "save" ? 'data-save="1"' : go[0] === "reload" ? 'data-reload="1"' : go[0] === "closeall" ? 'data-closeall="1"' : go[0] === "resealall" ? 'data-resealall="1"' : go[0] === "restoreprin" ? 'data-restoreprin="1"' : `data-go="${go[0]}"`}>${go[1]}</button>` : ""}</div>`);
+  const add = (cls, html, go) => items.push(`<div class="al ${cls}"><span>${html}</span>${go ? `<button class="go" type="button" ${go[0] === "save" ? 'data-save="1"' : go[0] === "reload" ? 'data-reload="1"' : go[0] === "closeall" ? 'data-closeall="1"' : go[0] === "resealall" ? 'data-resealall="1"' : go[0] === "restoreprin" ? 'data-restoreprin="1"' : go[0] === "undobatch" ? 'data-undobatch="1"' : `data-go="${go[0]}"`}>${go[1]}</button>` : ""}</div>`);
   if (S.conflict) add("bad", "Кошелёк изменили в другом окне или под другим аккаунтом. Обновите страницу, чтобы увидеть изменения.", ["reload", "Обновить страницу"]);
   else if (S.saveFailed && !S.saving) add("bad", "Последние изменения не сохранились в базе.", ["save", "Сохранить ещё раз"]);
   const dm = [...new Set((st?.closed_drift || []).map(x => x.month))].sort();
@@ -6503,6 +6539,7 @@ RENDER.alerts = function () {
   const lostP = lostPrincipal();
   if (lostP.length) add("warn", `Тело займов попало в другую категорию из-за массовой правки: ${pl(lostP.length, "операция", "операции", "операций")} (${[...new Set(lostP.map(o => mLabel(o.d.slice(0, 7))))].slice(0, 3).join(", ")}${new Set(lostP.map(o => o.d.slice(0, 7))).size > 3 ? "…" : ""}).`, ["restoreprin", "Вернуть"]);
   if (st?.warnings?.length) add("warn", `Замечаний пересчёта: ${st.warnings.length}.`, ["q", "Открыть"]);
+  if (S.lastBatch && Date.now() - S.lastBatch.at < 15 * 60e3 && batchIds(S.lastBatch.id).length > 1) add("info", `Правка применена к ${pl(batchIds(S.lastBatch.id).length, "операции", "операциям", "операциям")}.`, ["undobatch", "Отменить пакет"]);
   if (cashAsk() && !cashAskSkipped()) {
     const cur = todayISO().slice(0, 7), prev = W._py.mshift(cur, -1);
     items.push(`<div class="al info"><span>Начался ${MONTH_NAMES[+cur.slice(5) - 1].toLowerCase()}: сколько наличных сейчас? Сверим ${MONTH_NAMES[+prev.slice(5) - 1].toLowerCase()}.</span><span class="gos"><button class="go" type="button" data-cashcount="1">Указать</button><button class="go" type="button" data-cashskip="1">Не сейчас</button></span></div>`);
@@ -6517,7 +6554,9 @@ RENDER.alerts = function () {
   if (asof && S.tab === "ops") { const lag = dayDiff(asof, todayISO()); if (lag > 45) add("warn", `Выписка по ${fmtFull(asof)} устарела — нужна свежая.`, ["in", "Загрузить"]); else if (lag >= 3) add("neutral", `Данные банка по ${dGen(asof)}`, ["in", "Загрузить"]); }
   if (S.tab === "ops") for (const g of statementGaps().slice(0, 3)) add("warn", `Нет выписки ${esc(acctLabel(g.acct))} за ${fmtFull(g.from)} – ${fmtFull(g.to)}.`, ["in", "Загрузить"]);
   // П10 (7.3): месяцы закрываются сами (autoClose); на экране — не больше одной плашки, самая важная
-  $("alerts").innerHTML = items.slice(0, 1).join("");
+  /* П15.1 (R8): первая плашка — самая важная (порядок добавления: потеря данных → восстановление → закрытие → подсказки); остальные не теряются: «Ещё N» */
+  const hid = items.length - 1; if (hid <= 0) S.alertsAll = false;
+  $("alerts").innerHTML = (S.alertsAll ? items : items.slice(0, 1)).join("") + (hid > 0 ? `<button class="al-more" type="button" data-alertsmore="1" aria-expanded="${!!S.alertsAll}">${S.alertsAll ? "Свернуть" : "Ещё " + hid}</button>` : "");
   /* П15.0б: какая плашка показана (без сумм) — видно, что человека отвлекает и что он игнорирует */
   try { const tx = (items[0] || "").replace(/<[^>]+>/g, " ").replace(/\d{1,3}(?:[\s\u00a0]\d{3})*,\d{2}\s*€|\d+[,.]\d{2}\s*€/g, "# €").replace(/\s+/g, " ").trim().slice(0, 140); if (tx !== S._alLog) { S._alLog = tx; if (tx) logEv("alert", tx + " @" + (S.tab || "")); } } catch (e) { }
 };
@@ -7541,7 +7580,7 @@ function monthCard() {
   const drift = new Set((S.status?.closed_drift || []).map(y => y.month));
   let actH = "";
   if (closed && drift.has(m)) actH = `<div class="det-act"><button class="btn" type="button" data-reseal="${m}">Принять изменения ${mLabel(m)}</button><span class="small muted">итоги закрытого месяца пересчитаются по журналу</span></div>`;
-  const res = S.closeRes && S.closeRes.month === m ? `<ul class="plain" style="color:var(--bad)">${S.closeRes.problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : "";
+  const res = S.closeRes && S.closeRes.month === m ? `<ul class="plain" style="color:var(--bad)">${S.closeRes.problems.map(p => `<li>${esc(plainProblem(p))}</li>`).join("")}</ul>` : "";
   // цифры месяца и группы — на «Главной» (решение владельца 22.10: дублировались); здесь — только действия с месяцем
   const need = actH || res || x.q_count;
   box.hidden = !need; if (!need) { box.innerHTML = ""; return; }
@@ -7881,6 +7920,9 @@ function choiceOf(x) {
     : qPrefill(x) ? Object.assign(qPrefill(x), { rule: false, marker, conf: null, by: "запасная" })
     : { type: x.dir === "in" ? "Доход" : "Расход", group: "", sub: "", rule: false, marker, conf: null, by: null };
   if (c.rule && ruleImpact(x, marker, c).changed.length) c.rule = false;   // правило перекрасило бы уже разложенное — только по вашему решению
+  /* П15.1: приход, который ИИ счёл возвратом покупки, но покупки в загруженных выписках нет (она до начала истории) — подставляем «Доход → Возвраты и возврат долга»,
+     решение остаётся за человеком (доход сам не применяется): вместо ответа «Расход», который всё равно отклонялся плашкой */
+  if (s && c.conf !== "user" && c.by !== "запасная" && refundBlocked(x, c)) Object.assign(c, { type: "Доход", group: "Доход", sub: "Возвраты и возврат долга", rule: false, conf: "low", why: "похоже на возврат, но покупки в загруженных выписках нет" });
   return c;
 }
 /* П8.4 / П10.7: охват — «Эти операции» или «Эти и будущие» (правило). Признак правила — название получателя,
@@ -9438,6 +9480,21 @@ const BATCH_VIA = "ваш выбор: для похожих";
 function lostPrincipal() {
   const E = S.edits || {}; return allOps().filter(o => o.t !== "Погашение долга" && E[o.id]?.via === BATCH_VIA && E[o.id].was?.t === "Погашение долга");
 }
+/* П15.1 (R2): пакет правок — единица. Отмена снимает правки всех операций пакета и правило, созданное этой правкой */
+const batchIds = bid => bid ? Object.values(S.edits || {}).filter(e => e && e.batch === bid).map(e => e.tx || e.id) : [];
+async function undoBatch(bid) {
+  const ids = batchIds(bid); if (ids.length < 2) return;
+  const rule = S.lastBatch?.id === bid ? S.lastBatch.rule : "";
+  logEv("batch-undo", `${bid} · ${ids.length} оп.${rule ? " · правило снято" : ""}`);
+  await act("Отменяю пакет правок…", () => {
+    for (const id of ids) delItem("edits", id);
+    if (rule && S.book.rules.rules.some(r => r.id === rule)) { const rd = clone(S.book.rules); rd.rules = rd.rules.filter(r => r.id !== rule); rd.version = (rd.version || 0) + 1; S.book.rules = rd; }
+    reapply();
+  });
+  if (S.lastBatch?.id === bid) S.lastBatch = null;
+  showNote(`Пакет отменён: ${pl(ids.length, "операция", "операции", "операций")} возвращены.`);
+}
+document.addEventListener("click", ev => { if (ev.target.closest("[data-undobatch]") && S.lastBatch) undoBatch(S.lastBatch.id); });
 document.addEventListener("click", async ev => {
   if (!ev.target.closest("[data-restoreprin]")) return;
   const lost = lostPrincipal(); if (!lost.length) return;
@@ -10561,6 +10618,7 @@ function openOp(id) {
   S.scope = !mk0 ? "one" : mk0.toLowerCase() === S.scopeM.cp.toLowerCase() ? "cp" : mk0.toLowerCase() === S.scopeM.purpose.toLowerCase() ? "purpose" : "custom";
   $("eMarker").value = mk0 || S.scopeM.cp;
   $("dlgUndo").hidden = !e;
+  { const nb = e?.batch ? batchIds(e.batch).length : 0; $("dlgUndoBatch").hidden = nb < 2; $("dlgUndoBatch").textContent = `Отменить пакет (${nb})`; $("dlgUndoBatch").dataset.bid = nb > 1 ? e.batch : ""; }
   const closed = o.d.slice(0, 7) <= (S.book.state.closed_through || "");
   $("dlgState").className = "note";
   const mk = catMark(o);
@@ -10593,7 +10651,22 @@ function similarOps(o, m, c) {
   const lm = String(m || "").trim().toLowerCase(); if ([...lm].length < 3) return [];
   const rd = ruleDirFor(o.a > 0 ? "in" : "out", c.type === "Возврат" ? "Расход" : c.type);
   /* П14.14: платежи по займам («Погашение долга») массовой правкой не трогаем — у них получатель часто вы сами (NIKOLAJS POGODINS) */
-  return allOps().filter(x => !isManual(x) && x.id !== o.id && (rd === "any" || (x.a > 0 ? "in" : "out") === rd) && hayOp(x).includes(lm) && (x.t !== "Погашение долга" || c.type === "Погашение долга"));
+  return allOps().filter(x => !isManual(x) && x.id !== o.id && (rd === "any" || (x.a > 0 ? "in" : "out") === rd) && hayOp(x).includes(lm) && (x.t !== "Погашение долга" || c.type === "Погашение долга")
+    && (x.t === o.t || x.t === "❓"));   // П15.1 (R1): только тот же тип, что у исходной операции (Расход / Возврат / Перемещение / Доход не смешиваются) или ещё без категории
+}
+/* П15.1 (R1/R2): предпросмотр «для всех похожих». Подозрительные — без галочки; общий признак — всё без галочки; > 15 операций или > 500 € — отдельное «да» */
+const SIM_GENERIC = /^(pirkums|atgriezts|maksājums|maksajums|pārskaitījums|parskaitijums|komisija|naudas|izsn|card|payment|transfer|refund|перевод|оплата|возврат)(\s+\S+)?$/i;
+const SIM_SUSPECT = /перевод|transfer|pamatsumma|aizdevum|credit repayment|pārskait/i;
+const SIM_MAX = 300;
+function simState(o, m, c) {
+  const diff = similarOps(o, m, c).filter(x => !sameCat(x, c)), cand = diff.slice(0, SIM_MAX);
+  const ab = cand.map(x => Math.abs(x.a)).sort((a, b) => a - b), med = ab.length ? ab[Math.floor(ab.length / 2)] : 0;
+  const generic = SIM_GENERIC.test(String(m).trim()) || (diff.length >= 10 && diff.length / Math.max(1, allOps().length) > 0.2);
+  const sus = x => (med > 0 && Math.abs(x.a) > 3 * med) || SIM_SUSPECT.test(hayOp(x));
+  const key = [m, c.type, c.group, c.sub, o.id].join("|");
+  if (S.simKey !== key) { S.simKey = key; S.simSure = false; S.simOff = new Set(cand.filter(x => generic || sus(x)).map(x => x.id)); }
+  const on = cand.filter(x => !S.simOff.has(x.id)), sum = on.reduce((a, x) => a + Math.abs(x.a), 0);
+  return { diff, cand, rest: diff.length - cand.length, generic, sus, on, sum, gate: on.length > 15 || sum > 500 };
 }
 const opType = (c, x) => { const t = c.type === "Возврат" ? "Расход" : c.type; return t === "Расход" && x.a > 0 ? "Возврат" : t; };
 const sameCat = (x, c) => x.t === opType(c, x) && x.g === c.group && x.s === c.sub;
@@ -10619,19 +10692,44 @@ function markerInfo() {
   const okCat = !!(c.type && c.group && c.sub);
   if (!on || !o) { $("dlgSave").disabled = !okCat || !S.canWrite; return; }
   const m = $("eMarker").value.trim().toLowerCase();
-  let msg = "", bad = false;
+  let msg = "", bad = false, html = "", gate = false;
   if ([...m].length < 3) { msg = "Признак короче 3 символов."; bad = true; }
   else if (!hayOp(o).includes(m)) { msg = "Этого текста нет в самой операции."; bad = true; }
   else {
     const closed = S.book.state.closed_through || "";
-    const hits = similarOps(o, m, c), diff = hits.filter(x => !sameCat(x, c)), shut = diff.filter(x => x.d.slice(0, 7) <= closed);
-    const was = [...new Set(diff.map(x => x.t === "❓" ? "без категории" : x.t === "Расход" || x.t === "Возврат" ? x.g + " · " + x.s : x.t + " · " + x.s))].slice(0, 3).join("; ");
-    msg = hits.length ? `Похожих с «${m}»: ${hits.length}. Категория изменится у ${diff.length}${was ? ` (сейчас: ${was})` : ""}${shut.length ? `; из них в закрытых месяцах ${shut.length} — итоги нужно будет принять` : ""}. Правило — и для следующих выписок.`
-      : `Других операций с «${m}» нет. Правило — для следующих выписок.`;
+    const hits = similarOps(o, m, c);
+    if (!hits.length) msg = `Других операций с «${m}» нет. Правило — для следующих выписок.`;
+    else {
+      const P = simState(o, m, c), shut = P.on.filter(x => x.d.slice(0, 7) <= closed);
+      const was = [...new Set(P.diff.map(x => x.t === "❓" ? "без категории" : x.t === "Расход" || x.t === "Возврат" ? x.g + " · " + x.s : x.t + " · " + x.s))].slice(0, 3).join("; ");
+      if (!P.diff.length) msg = `Похожих с «${m}»: ${hits.length}, у всех уже эта категория. Правило — для следующих выписок.`;
+      else {
+        gate = P.gate;
+        html = `<div><b>Затронет ${P.on.length} из ${P.diff.length} операций на ${eur(P.sum)} €</b>${was ? ` · сейчас: ${esc(was)}` : ""}${shut.length ? `; в закрытых месяцах ${shut.length} — итоги нужно будет принять` : ""}.</div>`
+          + (P.generic ? `<div class="sim-warn">Признак «${esc(m)}» слишком общий: правило на будущее не создаётся, операции отметьте вручную.</div>` : "")
+          + `<div class="sim-bar"><button type="button" class="linkbtn" data-simall="1">Отметить все</button><button type="button" class="linkbtn" data-simall="0">Снять все</button></div>`
+          + `<div class="simlist">${P.cand.map(x => `<label class="simrow${P.sus(x) ? " sus" : ""}"><input type="checkbox" data-sim="${esc(x.id)}"${S.simOff.has(x.id) ? "" : " checked"}><span>${esc(x.d.slice(8, 10) + "." + x.d.slice(5, 7))} ${esc(String(cpText(x)).slice(0, 28))}${P.sus(x) ? " ⚠" : ""}</span><b>${eur(x.a)}</b></label>`).join("")}</div>`
+          + (P.rest ? `<div class="small muted">Ещё ${P.rest} операций не затрагиваются (за раз — до ${SIM_MAX}).</div>` : "")
+          + (P.gate ? `<label class="check sim-sure"><input type="checkbox" id="simSure"${S.simSure ? " checked" : ""}><span>Да, изменить ${P.on.length} операций на ${eur(P.sum)} €</span></label>` : "")
+          + (P.generic ? "" : `<div class="small muted">Правило — и для следующих выписок.</div>`);
+      }
+    }
   }
-  box.className = "note" + (bad ? " bad" : ""); box.textContent = msg;
-  $("dlgSave").disabled = bad || !okCat || !S.canWrite;
+  box.className = "note" + (bad ? " bad" : "");
+  if (html) { const lst = box.querySelector(".simlist"), top = lst ? lst.scrollTop : 0; box.innerHTML = html; const l2 = box.querySelector(".simlist"); if (l2) l2.scrollTop = top; } else box.textContent = msg;
+  $("dlgSave").disabled = bad || !okCat || !S.canWrite || (gate && !S.simSure);
 }
+$("eMarkerInfo").addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.matches("[data-sim]")) { t.checked ? S.simOff.delete(t.dataset.sim) : S.simOff.add(t.dataset.sim); S.simSure = false; markerInfo(); }
+  else if (t.id === "simSure") { S.simSure = t.checked; markerInfo(); }
+});
+$("eMarkerInfo").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-simall]"); if (!b || !S.simOff) return;
+  const o = S.current, c = chosen(), m = $("eMarker").value.trim(); if (!o) return;
+  const P = simState(o, m, c); if (b.dataset.simall === "1") P.cand.forEach(x => S.simOff.delete(x.id)); else P.cand.forEach(x => S.simOff.add(x.id));
+  S.simSure = false; markerInfo();
+});
 $("eType").addEventListener("change", () => { syncGroups(); markerInfo(); });
 $("eGroup").addEventListener("change", () => { syncSubs(); markerInfo(); });
 $("eSub").addEventListener("change", () => { $("eNewSWrap").hidden = $("eSub").value !== NEW_OPT; markerInfo(); });
@@ -10644,6 +10742,7 @@ $("dlgOk").addEventListener("click", async () => {
   $("dlg").close();
   await act("Отмечаю: проверено…", () => { const e = S.edits[o.id]; if (!e) return false; const m = catMark(o); putItem("edits", o.d.slice(0, 7), o.id, Object.assign({}, e, { src: m?.src || "user", chk: "single" })); reapply(); });
 });
+$("dlgUndoBatch").addEventListener("click", async () => { const b = $("dlgUndoBatch").dataset.bid; $("dlg").close(); if (b) await undoBatch(b); });
 $("dlgUndo").addEventListener("click", async () => {
   const o = S.current; if (!o) return;
   $("dlg").close();
@@ -10672,17 +10771,29 @@ $("dlgForm").addEventListener("submit", async ev => {
       const pat = W._py.pyEscape(marker).toLowerCase(), ex = S.book.rules.rules.find(r => (!r.layer || r.layer === "personal") && [pat, marker.toLowerCase()].includes(String(r.pattern).toLowerCase()));
       if (ex) { const rd = clone(S.book.rules); Object.assign(rd.rules.find(r => r.id === ex.id), { type: t, group: c.group, sub: c.sub, dir: rdir, edited: nowStr() }); rd.version = (rd.version || 0) + 1; S.book.rules = rd; mk = false; S.ruleUpdated = ex.id; }
     }
+    const bid = "B" + Date.now().toString(36);   // П15.1 (R2): общий номер пакета (у одиночной правки его нет)
     const pe = S.edits[o.id], aiWas = pe && /^авто/.test(pe.via || "") && (pe.group !== c.group || pe.sub !== c.sub) ? { g: pe.group, s: pe.sub } : pe?.ai_was && !pe.ai_was.q ? pe.ai_was : null;
     putItem("edits", o.d.slice(0, 7), o.id, Object.assign({ tx: o.id, month: o.d.slice(0, 7), type: opType(c, o), group: c.group, sub: c.sub, note: $("eNote").value.trim(),
-      was: { t: o.t, g: o.g, s: o.s }, cp: cpText(o), amount: o.a, date: o.d, make_rule: mk, marker: mk ? marker : "", rule_dir: rdir, at, state: "ожидает", src: "user", chk: "single" }, aiWas ? { ai_was: aiWas } : {}));
+      was: { t: o.t, g: o.g, s: o.s }, cp: cpText(o), amount: o.a, date: o.d, make_rule: mk, marker: mk ? marker : "", rule_dir: rdir, at, state: "ожидает", src: "user", chk: "single" }, aiWas ? { ai_was: aiWas } : {}, rule && marker ? { batch: bid } : {}));
     S.simDone = 0;
-    if (rule && marker) for (const x of similarOps(o, marker, c)) {
-      if (sameCat(x, c)) continue;
-      putItem("edits", x.d.slice(0, 7), x.id, { tx: x.id, month: x.d.slice(0, 7), type: opType(c, x), group: c.group, sub: c.sub, note: "",
-        was: { t: x.t, g: x.g, s: x.s }, cp: cpText(x), amount: x.a, date: x.d, make_rule: false, marker: "", at, state: "ожидает", via: "ваш выбор: для похожих", src: "user", chk: "batch" });
-      S.simDone++;
+    const done = [{ id: o.id, was: o.t, sum: o.a }];
+    if (rule && marker) {
+      const P = simState(o, marker, c);
+      for (const x of P.cand) {
+        if (S.simOff.has(x.id)) continue;   // П15.1: только отмеченные в предпросмотре
+        putItem("edits", x.d.slice(0, 7), x.id, { tx: x.id, month: x.d.slice(0, 7), type: opType(c, x), group: c.group, sub: c.sub, note: "",
+          was: { t: x.t, g: x.g, s: x.s }, cp: cpText(x), amount: x.a, date: x.d, make_rule: false, marker: "", at, state: "ожидает", via: "ваш выбор: для похожих", src: "user", chk: "batch", batch: bid });
+        done.push({ id: x.id, was: x.t, sum: x.a });
+        S.simDone++;
+      }
     }
+    if (S.simDone) {
+      S.lastBatch = { id: bid, n: done.length, ids: done.map(d => d.id), at: Date.now(), rule: "" };
+      const sum = done.reduce((a, d) => a + Math.abs(d.sum), 0), froms = [...new Set(done.map(d => d.was))].join("+");
+      logEv("batch", `${bid} · ${done.length} оп. · ${froms} → ${c.type} · ${eur(sum)} € · id: ${done.slice(0, 50).map(d => d.id).join(",")}${done.length > 50 ? "…" : ""}`);
+    } else S.lastBatch = null;
     res = reapply();
+    if (S.lastBatch && res?.new_rules?.length) S.lastBatch.rule = res.new_rules[0].id || "";
   });
   const w = (res?.warnings || []).filter(x => x.includes(o.id) && /правило|маркер/.test(x));
   const more = S.simDone ? `, похожих изменено: ${S.simDone}` : "";
