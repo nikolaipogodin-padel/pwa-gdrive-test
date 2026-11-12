@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.6 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.7 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -965,6 +965,7 @@ body .btn.primary:disabled { background: #b1c9d0; color: #eaf5f7; opacity: 1; }
 body .btn:not(.primary):not(.quiet) { background: var(--surface); border: 1.5px solid var(--accent); color: var(--accent); }
 body :is(select, input:not([type=checkbox]):not([type=file]), textarea) { background: var(--fld, var(--surface)); border-color: var(--fldl, var(--line)); border-radius: 10px; }
 .linkbtn { text-decoration: none; }
+.qc-own { padding: 2px 0 8px 44px; } .qc-own .linkbtn { font-weight: 650; min-height: 36px; }
 .tri::before, .wiz-set > summary::before, .inc-pur > summary::before, .qg-ops > summary::before, .hint-fold > summary::before, #p-in .up-hist > summary::before {
   content: ""; flex: none; display: inline-block; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid currentColor; margin-right: 9px; transform-origin: 3px 50%; transition: transform .16s ease; }
 details[open] > summary.tri::before, .wiz-set[open] > summary::before, .inc-pur[open] > summary::before, .qg-ops[open] > summary::before, .hint-fold[open] > summary::before, #p-in .up-hist[open] > summary::before { transform: rotate(90deg); }
@@ -1527,6 +1528,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 
     <form class="cashform" id="inForm">
       <h2>Траты вне выписки</h2>
+      <p class="small muted" style="margin:0 0 8px">Любые траты, которых ещё нет в выписке — можно несколько сразу. Остаток наличных и их история — <button type="button" class="linkbtn" data-go="cash">во вкладке «Наличные»</button>.</p>
       <textarea id="inText" rows="2" aria-label="Траты текстом или голосом" placeholder="Rimi 23,40; бензин 60; наличными рынок 15"></textarea>
       <div class="in-row"><div class="drop" id="inDrop" tabindex="0">
         <span id="inDropText">Скриншоты или фото чеков.</span>
@@ -1557,6 +1559,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       </div>
       <div class="note-row"><label><span id="cNoteL">Что купили</span><input id="cNote" type="text" placeholder="Рынок, овощи 15 — ИИ заполнит сумму и категорию"></label><button class="btn primary" type="submit" id="cSave">Добавить</button></div>
       <span class="small muted" id="cMsg" aria-live="polite"></span>
+      <p class="small muted" style="margin:0">Несколько трат одной строкой или по фото чека — <button type="button" class="linkbtn" data-go="in">во «Внести»</button>.</p>
     </form>
     <div class="cash-wrap" id="cashWrap">
     <button type="button" class="cash-tile" id="cashTile" aria-expanded="false" aria-controls="cashFn"><span>Наличные сейчас</span><b class="num" id="cashNowV">—</b></button>
@@ -8042,6 +8045,7 @@ function qRow(x) {
       <div class="qc-main" data-qedit="${k}" role="button" tabindex="0" aria-expanded="${open}" aria-label="${esc(x.name)}: исправить категорию">${body}</div>
     </div>
     ${open ? qEditor(x) : ""}
+    ${!open && !dirty && x.dir !== "in" && c && c.by === "запасная" && c.group === "Переводы людям" ? `<div class="qc-own"><button type="button" class="linkbtn" data-qown="${k}">Это мой счёт — не расход</button></div>` : ""}
     <details class="qg-ops" data-qops="${k}"${opsOpen ? " open" : ""}><summary><span class="t-show">Показать операции · ${n}</span><span class="t-hide">Скрыть операции · ${n}</span></summary><div class="qg-opsl">${opsOpen ? qOpsHtml(x) : ""}</div></details>
   </div>`;
 }
@@ -8320,6 +8324,8 @@ document.addEventListener("click", ev => {
   if (t) { qCollapse(); S.qTab = t.dataset.qtab; S.qLimit = 40; draw("questions"); window.scrollTo?.({ top: 0 }); return; }
   const pr = ev.target.closest("[data-qper]");
   if (pr) { qCollapse(); S.qPer = pr.dataset.qper; S.qTab = null; S.qLimit = 40; draw("questions"); window.scrollTo?.({ top: 0 }); return; }
+  const ow = ev.target.closest("[data-qown]");
+  if (ow) { const key = ow.dataset.qown, r = qEditOf(key); if (!r) return; Object.assign(r.e, OWN_CAT, { gNew: false, sNew: false, rule: false, marker: "" }); qTouch(r.e); logEv("click", "qOwn"); qSave(key); return; }   // П15.7
   const ed = ev.target.closest("[data-qedit]");
   if (ed) { qOpenEd(ed.dataset.qedit); return; }
   const sc = ev.target.closest("[data-qscope]");
