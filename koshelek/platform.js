@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П15.8 · 12.11.2026";
+const BUILD = "П15.9 · 12.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
@@ -426,16 +426,16 @@ function renderConn() {
   if (gMsg) stGoogle.push(el("div", { class: "m bad" }, gMsg));
   if (Sync.conflict) stGoogle.push(el("div", { class: "st" }, el("div", { class: "m" }, "На Диске копия от " + new Date(Sync.conflict.data.savedAt || Date.now()).toLocaleString("ru-RU") + ". Выберите, какие данные оставить — вторые будут заменены."),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", onclick: () => Sync.resolve(true) }, "Взять с Диска"), el("button", { class: "btn", type: "button", onclick: () => Sync.resolve(false) }, "Оставить с " + (IS_PHONE ? "этого телефона" : "этого компьютера")))));
-  const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён " + DEV.on : "Ключ Gemini (AIza…)", autocomplete: "off" });
+  const key = el("input", { type: "password", id: "kwKey", placeholder: hasKey ? "Ключ сохранён " + DEV.on : "Ключ Gemini", autocomplete: "off" });
   const stForm = [
     el("div", { class: "m" }, "ИИ раскладывает траты по категориям. Нужен личный бесплатный ключ Google AI Studio. Ключ хранится только " + DEV.on + " и никуда не синхронизируется."),
     el("ol", { class: "m", style: "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px" },
       el("li", null, el("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener" }, "Откройте страницу ключа"), " и войдите тем же аккаунтом Google."),
       el("li", null, "Нажмите «Create API key» и выберите проект (или создайте новый)."),
-      el("li", null, "Скопируйте ключ — он начинается с «AIza»."),
+      el("li", null, "Скопируйте ключ целиком (длинная строка без пробелов)."),
       el("li", null, "Вернитесь сюда, нажмите «Вставить из буфера», затем кнопку проверки ниже.")),   // П13.4 (D1)
     key,
-    el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: async () => { try { const t = (await navigator.clipboard.readText()).trim(); if (t) { key.value = t; aiMsg = /^AIza[\w-]{20,}$/.test(t) ? "" : "В буфере не похоже на ключ: он начинается с «AIza» и без пробелов."; } else aiMsg = "Буфер пуст: скопируйте ключ на странице Google."; } catch (e) { aiMsg = "Браузер не дал доступ к буферу — вставьте ключ вручную в поле."; } const v = key.value; renderConn(); const k2 = document.getElementById("kwKey"); if (k2) k2.value = v; } }, "Вставить из буфера")),
+    el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: async () => { try { const t = (await navigator.clipboard.readText()).trim(); if (t) { key.value = t; aiMsg = /^[\w.-]{30,}$/.test(t) ? "" : "В буфере не похоже на ключ: это одна длинная строка без пробелов."; } else aiMsg = "Буфер пуст: скопируйте ключ на странице Google."; } catch (e) { aiMsg = "Браузер не дал доступ к буферу — вставьте ключ вручную в поле."; } const v = key.value; renderConn(); const k2 = document.getElementById("kwKey"); if (k2) k2.value = v; } }, "Вставить из буфера")),
     el("div", { class: "m" }, "Что уходит в Gemini: названия получателей и назначения платежей; для фото — само фото чека. Суммы и номера счетов при разборе операций не отправляются. Единственное исключение — кнопка «Неверно — спросить ИИ» при незнакомом формате выписки: уходят первые строки файла, номера счетов обезличены. Внимание: на бесплатном уровне Google может использовать отправленное для улучшения своих продуктов."),
     el("div", { class: "m" }, el("a", { href: "../privacy.html", target: "_blank", rel: "noopener" }, "Политика конфиденциальности"), " · ", el("a", { href: "../about.html", target: "_blank", rel: "noopener" }, "О приложении")),
     el("div", { class: "row" }, el("button", { class: "btn primary", type: "button", disabled: aiBusy, onclick: async () => { const v = key.value.trim(); if (!v && !hasKey) { aiMsg = "Вставьте ключ."; renderConn(); return; } await aiCheck(v); } }, aiBusy ? "Проверяю…" : hasKey && !key.value ? "Проверить ключ" : "Сохранить и проверить"),
