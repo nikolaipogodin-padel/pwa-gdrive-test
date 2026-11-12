@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.3 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.4 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -1332,6 +1332,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <p class="lead">CSV или Excel (.xls, .xlsx) из интернет-банка.<br>Можно сразу за весь период.</p>
       <label class="btn primary filebtn wiz-go">Выбрать файл выписки<input id="wFile" type="file" multiple accept=".csv,.xls,.xlsx,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="vh"></label>
       <p class="wiz-note" id="wMsg" role="status"></p>
+      <p class="small muted" style="text-align:center">Уже пользовались «Кошельком»? <button type="button" class="linkbtn" id="kwRestore">Вернуть данные с Google Диска</button></p>
     </div>
     <details class="more wiz-set" id="wSet"><summary>Имя и ИИ-помощник</summary>
       <div class="card wiz-card">
@@ -1672,7 +1673,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <details class="sa" id="saData"><summary><span class="sa-t">Данные</span></summary><div class="sa-b">
       <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><span class="note" id="sExportMsg" aria-live="polite"></span></div>
       <details class="more del-all" id="sDelBox"><summary>Удалить все данные</summary>
-          <p class="note">Вернуть нельзя: операции, правки, правила и настройки удалятся, апп начнётся с первого запуска. Перед этим можно «Скачать копию (JSON)». Для подтверждения напишите «удалить».</p>
+          <p class="note">Вернуть нельзя: операции, правки, правила и настройки удалятся, апп начнётся с первого запуска. Ключ ИИ и копия на Google Диске при этом остаются: ключ удаляется в «Подключениях», копию с Диска — как описано в политике конфиденциальности. Для подтверждения напишите «удалить».</p>
           <div class="inline"><input id="sDelWord" type="text" autocomplete="off" aria-label="Подтверждение удаления"><button class="btn quiet" type="button" id="sDel" disabled>Удалить всё</button></div>
         </details>
     </div></details>
@@ -7666,7 +7667,7 @@ document.addEventListener("click", ev => {
 /* ===== операции ===== */
 const isAuto = o => /^авто/.test(S.edits[o.id]?.via || "");
 /* П14.3: «Прочие расходы → Прочие расходы», которую вы не подтверждали, — приблизительный разбор, не итог */
-const isFb = o => o.t !== "❓" && o.a < 0 && o.g === "Прочие расходы" && o.s === "Прочие расходы" && catMark(o)?.src !== "user";
+const isFb = o => o.t !== "❓" && o.a < 0 && o.g === "Прочие расходы" && o.s === "Прочие расходы" && catMark(o)?.src !== "user" && !["batch", "single"].includes(catMark(o)?.chk);   // П15.4: отмеченное галочкой в «Разборе» — подтверждено
 /* П8.2. Два признака категории: источник (правило / ИИ / вы) и проверка (не проверено / принято пакетом / проверено вами).
    Новые правки хранят src, chk; старые (до П8.2) — по via: «авто…», «мелкие», «переразметка» — не проверено;
    «вопросы: ваш выбор» и правка в окне — проверено вами; «вопросы: ИИ/по прошлым ответам», «для похожих» — пакетом (как было нажато, неизвестно). */
@@ -8009,7 +8010,7 @@ const eurS = v => (v < 0 ? "−" : v > 0 ? "+" : "") + eur(Math.abs(v)) + " €"
 const normInfo = o => qInfo(o).replace(/\d+/g, "#").toLowerCase();
 function bankText(x) {
   const kinds = new Set(x.ops.map(normInfo));
-  return kinds.size > 1 ? { diff: true, t: "Разные назначения" } : { diff: false, t: String(x.ops[0].info || cpText(x.ops[0]) || "—").replace(/\s+/g, " ").trim() };
+  return kinds.size > 1 ? { diff: true, t: "Разные назначения" } : { diff: false, t: (String(x.ops[0].info || cpText(x.ops[0]) || "—").replace(/\b\d{4,6}\*{2,}\d{2,4}\b|\b(?:[\d*]{4} ){3}[\d*]{4}\b/g, "").replace(/\b\d{1,2}\.\d{1,2}\.\d{4}\b/g, "").replace(/\b\d+[.,]\d{2}\s*EUR\b/gi, "").replace(/\(\d{4,}\)/g, "").replace(/\s+/g, " ").trim() || "—") };
 }
 /* основание подсказки — одно короткое предложение */
 function qWhyBase(x, c) {
@@ -8131,7 +8132,7 @@ function qEditor(x) {
     </div>`;
   const R = qRuleOf(x, e), scope = e.rule && R.m ? "rule" : "one";
   const oneT = n > 1 ? `Эти ${pl(n, "операция", "операции", "операций")}` : "Эта операция", ruleT = n > 1 ? "Эти и будущие" : "Эта и будущие";
-  const reach = scope === "rule" ? (() => { const im = ruleImpact(x, R.m, e); return `Правило по «${esc(R.m)}»: эти ${pl(n, "операция", "операции", "операций")}${im.hits ? ` и ещё ${pl(im.hits, "операция", "операции", "операций")} сейчас` : ""}, дальше — новые с этим признаком.`; })() : "";
+  const reach = scope === "rule" ? (() => { const im = ruleImpact(x, R.m, e); return `Правило по «${esc(R.m)}»: ${n === 1 ? "эта операция" : "эти " + pl(n, "операция", "операции", "операций")}${im.hits ? ` и ещё ${pl(im.hits, "операция", "операции", "операций")} сейчас` : ""}, дальше — новые с этим признаком.`; })() : "";
   const subDis = !e.group || (e.group === "Прочие расходы" && !e.dirty) || (A && A.kind === "group");
   const prob = qProb(x, e); (S.qProbC = S.qProbC || {})[x.key] = prob;
   const defT = dirIn ? "Доход" : "Расход";
@@ -8242,7 +8243,7 @@ function qDraw(groups, V) {
   const onb3 = onbStep() === 3, exp = !!(S.qExp && S.qExp[V.tab]), lim = onb3 && !exp ? 4 : (S.qLimit || 40), B = perBounds(), rng = V.per === "old" ? B.old : B.rec;
   const oN = V.other.reduce((a, x) => a + x.ops.length, 0);
   $("qPer").innerHTML = `${esc(rng ? perName(rng[0], rng[1]) : "")}${V.per === "old" ? " · ранняя история" : ""}${oN ? ` <button type="button" class="linkbtn" data-qper="${V.per === "old" ? "rec" : "old"}">${V.per === "old" ? "Последние 2 месяца" : "Ранее"}: ${pl(oN, "операция", "операции", "операций")}</button>` : ""}`;
-  $("qTabs").innerHTML = Q_TABS.map(([k, t]) => `<button type="button" role="tab" data-qtab="${k}" aria-selected="${k === V.tab}"><span class="tl">${t}</span> <span class="n">${V.by[k].length}</span></button>`).join("");
+  $("qTabs").innerHTML = Q_TABS.filter(([k]) => V.by[k].length || k === V.tab).map(([k, t]) => `<button type="button" role="tab" data-qtab="${k}" aria-selected="${k === V.tab}"><span class="tl">${t}</span> <span class="n">${V.by[k].length}</span></button>`).join("");
   const outs = V.list.filter(x => x.dir !== "in"), ins = V.list.filter(x => x.dir === "in"), html = [], shown = [];
   const both = outs.length && ins.length;
   for (const [title, xs] of [["Списания", outs], ["Поступления", ins]]) {
@@ -9325,7 +9326,7 @@ const cleanInfo = t => String(t || "").replace(/\d{4,}\*+\d*/g, "****").replace(
 /* П12.4: компактный справочник «Тип: Группа [подстатьи]» вместо JSON */
 const catText = types => Object.entries(types).map(([t, gs]) => `${t}: ` + Object.entries(gs).map(([g, s]) => s.length ? `${g} [${s.join(", ")}]` : g).join("; ")).join("\n");
 /* назначение без дат, длинных номеров и ссылок — они не помогают определить категорию */
-const infoTxt = t => cleanInfo(t).replace(/(?<![\d.,])\d{1,6}[.,]\d{2}(?![\d.,])(\s*(EUR|€))?/gi, "").replace(/\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b/g, "").replace(/\b[A-Z0-9]{12,}\b/g, "").replace(/\b\d{5,}\b/g, "").replace(/\s+/g, " ").trim();
+const infoTxt = t => cleanInfo(t).replace(/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, "").replace(/\b\d{4,6}\*{2,}\d{2,4}\b|\b(?:[\d*]{4} ){3}[\d*]{4}\b/g, "").replace(/(?<![\d.,])\d{1,7}\s*(EUR|€)/gi, "").replace(/(?<![\d.,])\d{1,6}[.,]\d{2}(?![\d.,])(\s*(EUR|€))?/gi, "").replace(/\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b/g, "").replace(/\b[A-Z0-9]{12,}\b/g, "").replace(/\b\d{5,}\b/g, "").replace(/\s+/g, " ").trim();
 const tokSet = s => new Set(String(s || "").toLowerCase().split(/[^\p{L}]+/u).filter(w => w.length >= 3));
 /* примеры человека: сначала похожие на эту пачку по словам, затем самые частые — до 20 */
 function relevantExamples(chunk, opt) {
