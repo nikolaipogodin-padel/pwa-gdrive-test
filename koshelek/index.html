@@ -1,12 +1,13 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<script>window.KW_INDEX_BUILD="П15.2г · 09.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
-
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <title>Кошелёк</title>
 <meta name="theme-color" content="#0d5c6e">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Кошелёк">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
+</head><body>
+<script>window.KW_INDEX_BUILD="П15.3 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
 <style>
@@ -1336,7 +1337,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <div class="card wiz-card">
         <label>Ваше имя<input id="wName" type="text" maxlength="40" autocomplete="given-name" placeholder="Как к вам обращаться?"></label>
         <label class="aipick">ИИ-помощник<select id="wAI" aria-label="ИИ-помощник"><option value="auto">Авто</option><option value="off">Выключен</option></select><span id="wAIst" class="small" hidden>Не подключён · <button type="button" class="linkbtn" id="wAIcfg">Настроить</button></span></label>
-        <p class="small muted">ИИ использует лимит вашего аккаунта.<br>Номера счетов и карт ему не передаются. Операции хранятся в вашем личном разделе; файлы выписок не сохраняются.</p>
+        <p class="small muted">ИИ работает по вашему ключу Gemini.<br>Номера счетов и карт ему не передаются. Операции хранятся на этом устройстве; файл выписки не сохраняется.</p>
       </div>
     </details>
   </section>
@@ -1677,6 +1678,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     </div></details>
     <details class="sa" id="saAbout"><summary><span class="sa-t">О программе и диагностика</span></summary><div class="sa-b">
       <p class="note" id="foot"></p>
+      <p class="small"><a href="../privacy.html" target="_blank" rel="noopener">Политика конфиденциальности</a> · <a href="../about.html" target="_blank" rel="noopener">О приложении</a></p>
       <div class="inline"><button class="btn" type="button" id="aiTest">Проверить подключение ИИ</button><button class="btn" type="button" id="kwLog">Скопировать журнал для разработчика</button><button class="btn" type="button" id="kwLogFile">Сохранить журнал файлом</button></div>
       <p class="small" id="aiTestOut" aria-live="polite"></p>
     </div></details>
@@ -5470,7 +5472,7 @@ async function learnFormat(input, { formats = W.BUILTIN_FORMATS, profile = null,
   if (consent === false) return toHuman('определить формат самому не получилось, а отправка образца выписки Claude в профиле не разрешена');
   if (left <= 0) return toHuman(`Claude не смог описать формат за ${maxAttempts} попытки — нужна помощь человека`);
   if (!ask) return Object.assign(st, { status: 'needs_claude', next: 'ask_claude', claude_left: left,
-    message: st.guess.format ? 'формат определён неуверенно — можно спросить Claude' : 'формат не определён — можно спросить Claude (он увидит первые строки файла)' });
+    message: st.guess.format ? 'Формат файла определён неуверенно.' : 'Не удалось распознать формат файла.' });
   const prompt = formatPrompt(st.sample, { guess: st.guess, attempts: st.attempts, hint, withTool: withTools, fileName: st.fileName || fileName });
   const tool = withTools ? formatCheckTool(input, { formats, profile, guess: st.guess, now }) : null;
   let reply;
@@ -5499,7 +5501,7 @@ async function learnFormat(input, { formats = W.BUILTIN_FORMATS, profile = null,
   }
   return st.attempts.length >= maxAttempts ? toHuman(`Claude не смог описать формат за ${maxAttempts} попытки — нужна помощь человека`)
     : Object.assign(st, { status: 'needs_claude', next: 'ask_claude', claude_left: maxAttempts - st.attempts.length,
-        message: `описание не прошло проверку: ${t.problems[0]} — можно спросить Claude ещё раз (осталось ${maxAttempts - st.attempts.length})` });
+        message: `описание не прошло проверку: ${t.problems[0]} — можно спросить ИИ ещё раз (осталось ${maxAttempts - st.attempts.length})` });
 }
 
 // ───────────────────────── человек: исправления, ручной выбор, подтверждение ─────────────────────────
@@ -6389,15 +6391,14 @@ $("accForm").addEventListener("submit", async ev => {
   await setAccKinds(map); if (onbStep()) onbProcDraw?.();
 });
 $("aiTest").addEventListener("click", async () => {
-  const o = $("aiTestOut"), L = []; o.textContent = "Проверяю…";
+  const o = $("aiTestOut"); o.textContent = "Проверяю…"; let res = "", det = "";
   try {
-    L.push("страница внутри Claude: " + (window.claude ? "да" : "нет"));
-    const u = await use("user"); L.push("роль: " + (u ? ((await u.isOwner?.()) ? "владелец" : (await u.canEdit?.()) ? "редактор" : "читатель") : "не определена"));
-    const s = S.sample || await use("sample"); L.push("доступ к ИИ от платформы: " + (s ? "выдан" : "НЕ выдан"));
-    try { const pm = await window.claude?.use?.("permissions"); L.push("разрешения: " + JSON.stringify(await pm?.state?.())); } catch (e) { L.push("разрешения: " + (e.code || e.message || e)); }
-    if (s) { S.sample = s; try { const lim = await s.limits?.(); L.push("фото: " + (lim?.images ? "можно" : "нельзя")); const r = await s("Ответь одним словом: ок", { modelTier: "quick", cache: false }); L.push("ответ ИИ: " + String(r.text).slice(0, 40)); } catch (e) { L.push("ошибка ИИ: " + (e.code || "") + " " + (e.message || "")); } }
-  } catch (e) { L.push("сбой проверки: " + (e.message || e)); }
-  o.innerHTML = L.map(esc).join("<br>");
+    const s = S.sample || await use("sample");
+    if (!s) res = "ИИ не подключён. Ключ Gemini: «Настройки» → «Подключения».";
+    else { S.sample = s; try { const r = await s("Ответь одним словом: ок", { modelTier: "quick", cache: false }); det = "ответ: " + String(r.text).slice(0, 40); res = "✓ ИИ отвечает."; }
+      catch (e) { det = (e.code || "") + " " + (e.message || ""); res = e.code === "not_granted" ? "Ключ Gemini не принят. Проверьте его: «Настройки» → «Подключения»." : e.code === "rate_limited" ? "Слишком много запросов — попробуйте через минуту." : "Нет связи с Gemini. Проверьте интернет и попробуйте ещё раз."; } }
+  } catch (e) { det = String(e.message || e); res = "Проверка не удалась — попробуйте ещё раз."; }
+  o.textContent = res; try { logEv("ai-test", (res + (det ? " · " + det : "")).slice(0, 200)); } catch (e) { /* журнал недоступен */ }
 });
 document.addEventListener("click", async ev => { if (!ev.target.closest("#inPerm")) return; try { const pm = await window.claude?.use?.("permissions"); if (pm?.manage) await pm.manage(); else showNote?.("Откройте «Настройки» → «Подключения» и вставьте ключ Gemini."); } catch (e) { showNote?.("Откройте «Настройки» → «Подключения» и вставьте ключ Gemini."); } });
 document.addEventListener("change", async ev => { const x = ev.target.closest("[data-setacc]"); if (!x) return; logEv("click", "accKind:settings"); await setAccKinds({ [x.dataset.setacc]: x.value }); });
@@ -8414,7 +8415,7 @@ $("qFootGo").addEventListener("click", async () => {
   for (const k of keys) S.qMarks?.delete(k);
   window.scrollTo(0, Math.min(wy, document.documentElement.scrollHeight));
 });
-$("qCoachGo").addEventListener("click", () => { S.qIntroDone = true; $("qCoach").hidden = true; });
+$("qCoachGo").addEventListener("click", () => { S.qIntroDone = true; $("qCoach").hidden = true; if ($("p-q").hidden) selectTab("q"); });
 $("qPostpone").addEventListener("click", () => { qCollapse(); onbFinish(); });
 $("qNextPer").addEventListener("click", async () => {
   logEv("click", "qNextPer"); qCollapse();
@@ -9281,12 +9282,13 @@ async function maybeSuggest() {
 }
 /* имя владельца — по операциям, которые банк сам пометил как свои: переводы между своими счетами, погашение кредитки, тело займа */
 const NAME_RE = /^[\p{L}][\p{L}.'-]+(\s+[\p{L}][\p{L}.'-]+)+$/u;
+const ORG_RE = /(^|[\s"«.,-])(AS|A\/S|SIA|AB|UAB|OÜ|OU|SE|OY|OYJ|LTD|LLC|GMBH|INC|PLC|IK|ZS|BANK|BANKA|BANKAS|PANK|SWEDBANK|SEB|CITADELE|LUMINOR|REVOLUT|WISE|PAYSERA|N26)($|[\s"».,-])/i;
 function ownNames() {
   const n = new Map();
   for (const o of allOps()) {
     if (!["C01", "C02", "C05", "C12"].includes(o.r)) continue;
     const c = String(cpText(o) || "").trim().replace(/\s+/g, " ").toUpperCase();
-    if (NAME_RE.test(c) && c.length <= 40) n.set(c, (n.get(c) || 0) + 1);
+    if (NAME_RE.test(c) && c.length <= 40 && !ORG_RE.test(c)) n.set(c, (n.get(c) || 0) + 1);   // П15.3: банк и юрлицо — не «своё имя»
   }
   return [...n].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k);
 }
@@ -9622,6 +9624,7 @@ cashDateSync();
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cashDateSync(); });
 $("cashForm").addEventListener("submit", async ev => {
   ev.preventDefault();
+  { const raw = String($("cAmt").value).replace(/\s/g, "").replace(",", "."); if (raw && !(parseFloat(raw) > 0)) { $("cMsg").className = "small errmsg"; $("cMsg").textContent = "Укажите сумму больше нуля."; return; } }
   if (S.cashKind !== "in" && $("cNote").value.trim() && (!(parseFloat(String($("cAmt").value).replace(/\s/g, "").replace(",", ".")) > 0) || !$("cGroup").value || !$("cSub").value)) { await cashAI(); return; }
   const amount = Math.round(parseFloat(String($("cAmt").value).replace(/\s/g, "").replace(",", ".")) * 100) / 100;
   if (!(amount > 0)) { $("cMsg").className = "small errmsg"; $("cMsg").textContent = "Укажите сумму больше нуля."; return; }
@@ -10012,9 +10015,10 @@ RENDER.imp = function () {
   const msg = imp.msg ? `<p class="note bad">${esc(imp.msg)}</p>` : "";
   if (imp.stage === "reading" || imp.working) { box.innerHTML = `<p class="note run">${imp.claudeBusy ? "ИИ разбирается в формате файла — до двух минут…" : "Читаю файл…"}</p>${imp.claudeBusy ? btn("impStop", "Стоп") : ""}`; return; }
   if (imp.stage === "error" || imp.stage === "unsupported") {
-    box.innerHTML = `<p class="note bad">${esc(imp.error || imp.learn?.message || "файл не читается")}</p><div class="row">${btn("impCancel", "Убрать файл")}</div>`; return;
+    box.innerHTML = `<p class="note bad">${esc(impNice(imp.error || imp.learn?.message || "файл не читается"))}</p><div class="row">${btn("impCancel", "Убрать файл")}</div>`; return;
   }
-  if (imp.stage === "done") { box.innerHTML = waitQ; return; }
+  if (imp.stage === "done") { const list = imp.list || [], tot = list.reduce((a, x) => a + (x.added || 0), 0), sk = list.reduce((a, x) => a + (x.skipped || 0), 0);
+    box.innerHTML = `<p class="note ok">✓ ${tot ? `Добавлено: ${pl(tot, "новая операция", "новые операции", "новых операций")}` : "Новых операций нет — всё уже было в учёте"}${tot && sk ? `, ещё ${sk} уже были в учёте` : ""}.</p>` + waitQ; return; }
   if (false) {
     /* П11-6: одна строка итога; файлы по отдельности — свёрнуты; что делать дальше — карточка ниже («Разобрать N» или «Всё разобрано») */
     const list = imp.list || [], tot = list.reduce((a, x) => a + (x.added || 0), 0);
@@ -10027,7 +10031,7 @@ RENDER.imp = function () {
   if (imp.stage === "preview") { box.innerHTML = previewHtml(imp) + msg; return; }
   const c = imp.learn || {};
   if (imp.stage === "candidate") { box.innerHTML = candidateHtml(imp, c) + msg; return; }
-  if (imp.stage === "rejected") { box.innerHTML = `<p class="note bad">${esc(c.message || "файл не прошёл проверку")}</p><div class="row"><button class="btn" type="button" id="impCancel">Убрать файл</button></div>`; return; }
+  if (imp.stage === "rejected") { box.innerHTML = `<p class="note bad">${esc(impNice(c.message || "файл не прошёл проверку"))}</p><div class="row"><button class="btn" type="button" id="impCancel">Убрать файл</button></div>`; return; }
   if (imp.stage === "manual" || imp.stage === "needs_human" || imp.stage === "needs_claude") { box.innerHTML = helpHtml(imp, c) + msg; return; }
   box.innerHTML = `<p class="note">${esc(c.message || "")}</p>`;
 };
@@ -10084,18 +10088,23 @@ function candidateHtml(imp, c) {
     <div class="row">${claudeOk ? '<button class="btn" type="button" id="impClaude">Неверно — спросить ИИ</button>' : ""}<button class="btn" type="button" id="impManual">Выбрать колонки самому</button><button class="btn primary" type="button" id="impOk">Всё верно</button></div>`;
 }
 function canAskClaude() { return !!S.sample && profile()?.consent?.claude_format !== false && (S.imp?.learn?.claude_left ?? 3) > 0; }
+function impNice(m) { m = String(m || "");
+  if (/нет строки входящего или исходящего остатка/.test(m)) return "Выписка неполная: в файле нет начального или конечного остатка. Выгрузите её из банка целиком, без фильтров.";
+  if (/ожидается положительная сумма/.test(m)) return "Файл повреждён или изменён вручную. Выгрузите выписку из банка заново.";
+  if (/не сходится сам с собой/.test(m)) return "Суммы в файле не сходятся с остатком — похоже, выгрузка неполная. Выгрузите выписку из банка заново.";
+  return m ? m[0].toUpperCase() + m.slice(1) : m; }
 function helpHtml(imp, c) {
   const head = imp.learn?.guess?.analysis?.header || [];
-  const parts = [`<p class="note${imp.stage === "rejected" ? " bad" : ""}">${esc(c.message || "Формат файла не определился.")}</p>`];
+  const parts = [`<p class="note${imp.stage === "rejected" ? " bad" : ""}">${esc(impNice(c.message || "Формат файла не определился."))}</p>`];
   if (c.attempts?.length) parts.push(`<details class="more"><summary>Что пробовали (${c.attempts.length})</summary><ul class="plain">${c.attempts.map(a => `<li>${esc((a.problems || []).slice(0, 2).join("; ") || (a.ok ? "описание прошло проверку" : "ошибка"))}</li>`).join("")}</ul></details>`);
   if (imp.stage !== "manual" && canAskClaude()) {
     parts.push(`<label class="small muted" style="display:flex;flex-direction:column;gap:4px">Подсказка для ИИ, если есть<input id="impHint" type="text" maxlength="200" placeholder="Например: сумма в колонке «Kopā», списания с минусом"></label>`);
     parts.push(`<div class="row"><button class="btn" type="button" id="impManual">Выбрать колонки самому</button><button class="btn primary" type="button" id="impClaude">Спросить ИИ</button></div>`);
     parts.push(`<p class="note">ИИ увидит первые и последние строки файла; номера счетов и карт скрыты.${c.claude_left != null ? ` Осталось попыток: ${c.claude_left}.` : ""}</p>`);
-  } else if (imp.stage !== "manual" && !S.sample) parts.push('<p class="note">ИИ в этом просмотре недоступен — выберите колонки сами.</p>');
+  } else if (imp.stage !== "manual" && !S.sample) parts.push('<p class="note">ИИ не подключён. Укажите колонки сами — или подключите ИИ: «Настройки» → «Подключения».</p>');
   else if (imp.stage !== "manual" && profile()?.consent?.claude_format === false) parts.push('<p class="note">ИИ выключен («Без ИИ») — выберите колонки сами или включите ИИ-помощника в «Настройках».</p>');
   if (head.length) parts.push(manualHtml(imp, head));
-  else parts.push('<p class="note">В файле не нашлась строка заголовка с названиями колонок. Выгрузите выписку из банка заново (CSV или Excel) или пришлите файл владельцу аппа.</p>');
+  else parts.push('<p class="note">В файле не нашлась строка заголовка с названиями колонок. Выгрузите выписку из интернет-банка заново (CSV или Excel) и загрузите снова.</p>');
   parts.push(`<div class="row">${'<button class="btn" type="button" id="impCancel">Убрать файл</button>'}</div>`);
   return parts.join("");
 }
