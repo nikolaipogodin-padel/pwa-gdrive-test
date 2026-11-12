@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П15.7 · 12.11.2026";
+const BUILD = "П15.8 · 12.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
@@ -315,7 +315,7 @@ async function sampleText(input, opts) {
   return { text: AI.text(j), truncated: false, modelTierApplied: opts?.modelTier || "default" };
 }
 sampleText.json = async (input, opts) => {
-  const j = await AI.fetchGem({ contents: [{ role: "user", parts: await AI.parts(input, opts) }], generationConfig: { responseMimeType: "application/json", temperature: 0.2 } }, opts);
+  const j = await AI.fetchGem({ contents: [{ role: "user", parts: await AI.parts(input, opts) }], generationConfig: { responseMimeType: "application/json" } }, opts);
   let t = AI.text(j).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try { return JSON.parse(t); } catch (e) { const m = /[\[{][\s\S]*[\]}]/.exec(t); if (m) { try { return JSON.parse(m[0]); } catch (e2) { } } throw { code: "invalid_json", message: "ответ не JSON" }; }
 };
@@ -583,5 +583,35 @@ const use = async name => {
 window.claude = Object.freeze({ use });
 /* имя пользователя латиницей (Алина → alina): не источник дохода — переводы «от себя» */
 window.KW_NOINC = () => { try { const n = String((curProf() || {}).name || "").trim().toLowerCase(); if (!n) return []; const M = {а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"j",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sh",ы:"i",э:"e",ю:"ju",я:"ja",ь:"",ъ:""}; const l = [...n].map(c => M[c] != null ? M[c] : c).join(""); return [...new Set([n, l])].filter(x => x.length >= 3); } catch (e) { return []; } };
-window.KOSHELEK = { _hsh: hsh, openConn, openUsers, profile: curProf, Sync, AI, mem, kv, db, build: BUILD };
+/* П15.8 (K-04, K-12): резервная копия файлом и полное удаление */
+const Backup = {
+  make() { const docs = {}; for (const [k, v] of mem) if (!isLog(k)) docs[k] = v; return JSON.stringify({ koshelek_backup: 1, build: BUILD, savedAt: new Date().toISOString(), docs }); },
+  read(text) {
+    let d; try { d = JSON.parse(text); } catch (e) { throw { code: "bad", message: "Это не файл копии «Кошелька»." }; }
+    if (d && !d.koshelek_backup && (d.journal || d.exported)) throw { code: "old", message: "Эта копия сделана старой версией (до П15.8) и не восстанавливается. Сделайте новую копию." };
+    if (!d || d.koshelek_backup !== 1 || !d.docs || typeof d.docs !== "object" || Array.isArray(d.docs)) throw { code: "bad", message: "Это не файл копии «Кошелька»." };
+    const keys = Object.keys(d.docs).filter(k => !isLog(k)); if (!keys.length) throw { code: "empty", message: "В копии нет данных." };
+    return { n: keys.length, savedAt: d.savedAt || "", build: d.build || "", docs: Object.fromEntries(keys.map(k => [k, d.docs[k]])) };
+  },
+  async restore(text) {
+    const b = this.read(text), docs = Object.assign({}, b.docs); for (const [k, v] of mem) if (isLog(k)) docs[k] = v;
+    await idbTx(["docs"], "readwrite", tx => { const st = tx.objectStore("docs"); st.clear(); for (const [k, v] of Object.entries(docs)) st.put(v, k); });
+    mem.clear(); for (const [k, v] of Object.entries(docs)) mem.set(k, v);
+    await kvSet("dirty", true); await kvSet("setupDone", true);   // восстановленное уйдёт на Диск обычной отправкой
+    plog("storage", "восстановлено из файла: документов " + b.n); bc?.postMessage({ t: "reload", from: TAB });
+    return b.n;
+  },
+  /* вместе с «Удалить все данные»: ключ ИИ и/или копии на Диске */
+  async wipe(opt) {
+    const out = { key: false, drive: null };
+    if (opt && opt.key) { await kvSet("geminiKey", ""); ls.del(lk("gk")); out.key = true; }
+    if (opt && opt.drive && Sync.consented()) {
+      const files = (await drive.list()).filter(f => SLOTS.includes(f.name)); let n = 0;
+      for (const f of files) { await drive.api("/drive/v3/files/" + f.id, { method: "DELETE" }); n++; }
+      await kvSet("baseRev", 0); await kvSet("baseHash", {}); await kvSet("dirty", false); out.drive = n; plog("sync", "копии на Диске удалены: " + n);
+    }
+    return out;
+  },
+};
+window.KOSHELEK = { _hsh: hsh, openConn, openUsers, profile: curProf, Sync, AI, mem, db, build: BUILD, backup: { make: () => Backup.make(), read: t => { const b = Backup.read(t); return { n: b.n, savedAt: b.savedAt, build: b.build }; }, restore: t => Backup.restore(t), wipe: o => Backup.wipe(o) }, driveOn: () => Sync.consented(), hasKey: () => !!AI.key() };
 })();

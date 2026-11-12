@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.7 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.8 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -1333,7 +1333,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <p class="lead">CSV или Excel (.xls, .xlsx) из интернет-банка.<br>Можно сразу за весь период.</p>
       <label class="btn primary filebtn wiz-go">Выбрать файл выписки<input id="wFile" type="file" multiple accept=".csv,.xls,.xlsx,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="vh"></label>
       <p class="wiz-note" id="wMsg" role="status"></p>
-      <p class="small muted" style="text-align:center">Уже пользовались «Кошельком»? <button type="button" class="linkbtn" id="kwRestore">Вернуть данные с Google Диска</button></p>
+      <p class="small muted" style="text-align:center">Уже пользовались «Кошельком»? <button type="button" class="linkbtn" id="kwRestore">Вернуть данные с Google Диска</button> или <label class="linkbtn" style="cursor:pointer">из файла копии<input id="wRestoreFile" type="file" accept=".json,application/json" class="vh"></label></p>
     </div>
     <details class="more wiz-set" id="wSet"><summary>Имя и ИИ-помощник</summary>
       <div class="card wiz-card">
@@ -1674,9 +1674,13 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
       <div class="inline"><button class="btn" type="button" id="sRedo">Перепроверить ответы ИИ</button><button type="button" class="ib" id="sRedoTip" data-tip="ИИ ещё раз посмотрит операции, которые разложил раньше прежней подсказкой. Ваши правки и ваш выбор не меняются. Неясное вернётся в «Разбор»." aria-label="Подсказка" aria-expanded="false">i</button><span class="note" id="sRedoMsg" aria-live="polite"></span></div>
     </div></details>
     <details class="sa" id="saData"><summary><span class="sa-t">Данные</span></summary><div class="sa-b">
-      <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><span class="note" id="sExportMsg" aria-live="polite"></span></div>
+      <div class="inline"><button class="btn" type="button" id="sExport">Скачать копию (JSON)</button><label class="btn filebtn">Восстановить из копии<input id="sRestoreFile" type="file" accept=".json,application/json" class="vh"></label><span class="note" id="sExportMsg" aria-live="polite"></span></div>
+      <div id="sRestoreBox" hidden><p class="note" id="sRestoreInfo"></p><div class="inline"><button class="btn primary" type="button" id="sRestoreGo">Заменить данные копией</button><button class="btn" type="button" id="sRestoreNo">Отмена</button></div></div>
+      <p class="small muted">Копия — файл со всеми операциями, правками и правилами. Его можно загрузить обратно здесь же, в том числе на другом устройстве. Ключ ИИ в копию не входит.</p>
       <details class="more del-all" id="sDelBox"><summary>Удалить все данные</summary>
-          <p class="note">Вернуть нельзя: операции, правки, правила и настройки удалятся, апп начнётся с первого запуска. Ключ ИИ и копия на Google Диске при этом остаются: ключ удаляется в «Подключениях», копию с Диска — как описано в политике конфиденциальности. Для подтверждения напишите «удалить».</p>
+          <p class="note">Вернуть нельзя: операции, правки, правила и настройки удалятся, апп начнётся с первого запуска. Для подтверждения напишите «удалить».</p>
+          <label class="small" id="sDelKeyL" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDelKey"> Удалить и ключ ИИ с этого устройства</label>
+          <label class="small" id="sDelDriveL" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sDelDrive"> Удалить и копии на Google Диске</label>
           <div class="inline"><input id="sDelWord" type="text" autocomplete="off" aria-label="Подтверждение удаления"><button class="btn quiet" type="button" id="sDel" disabled>Удалить всё</button></div>
         </details>
     </div></details>
@@ -9809,7 +9813,7 @@ document.addEventListener("click", ev => {
 });
 
 /* ===== выписка банка: формат → предпросмотр → импорт ===== */
-const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+const XLSX_URL = "xlsx.full.min.js";   // П15.8: SheetJS 0.20.3 лежит рядом с приложением
 let xlsxLoad = null;
 function loadXlsx() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -11375,12 +11379,31 @@ $("sAuto").addEventListener("change", async () => {
 
 $("sExport").addEventListener("click", async () => {
   if (!S.downloads) return;
-  const data = { app: APP_VERSION, engine: W.ENGINE, exported: nowStr(), profile: S.inputs.profile, state: S.view?.meta?.state, rules: S.view?.meta?.rules,
-    journal: S.view?.journal, edits: S.inputs.edits, cash: S.inputs.cash, pending: S.inputs.pending, uploads: S.inputs.uploads };
-  try { await S.downloads.save({ filename: `koshelek-${todayISO()}.json`, data: JSON.stringify(data, null, 1) }); $("sExportMsg").textContent = "Файл сохранён."; }
-  catch (e) { $("sExportMsg").textContent = e?.code === "declined" ? "Скачивание отменено." : "Не получилось скачать" + (e?.code ? ` [${e.code}]` : "") + "."; }
+  try { if (SAVE.p) await SAVE.p; await S.downloads.save({ filename: `koshelek-kopija-${todayISO()}.json`, data: window.KOSHELEK.backup.make() }); $("sExportMsg").textContent = "Файл сохранён."; }
+  catch (e) { $("sExportMsg").textContent = e?.code === "declined" ? "Скачивание отменено." : "Не получилось скачать."; }
 });
+/* П15.8 (K-04): восстановление из файла копии */
+let restoreText = "";
+$("sRestoreFile").addEventListener("change", async ev => {
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; restoreText = ""; $("sRestoreBox").hidden = true; if (!f) return;
+  try { const t = await f.text(), b = window.KOSHELEK.backup.read(t); restoreText = t;
+    $("sRestoreInfo").textContent = `Копия${b.savedAt ? " от " + new Date(b.savedAt).toLocaleString("ru-RU") : ""}. Все данные на этом устройстве будут заменены данными из копии. Вернуть нельзя.`;
+    $("sRestoreBox").hidden = false; $("sExportMsg").textContent = ""; }
+  catch (e) { $("sExportMsg").textContent = e?.message || "Файл не читается."; }
+});
+$("wRestoreFile").addEventListener("change", async ev => {   // первый экран: устройство пустое — заменять нечего
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  try { await window.KOSHELEK.backup.restore(await f.text()); location.reload(); } catch (e) { $("wMsg").textContent = e?.message || "Файл не читается."; }
+});
+$("sRestoreNo").addEventListener("click", () => { restoreText = ""; $("sRestoreBox").hidden = true; });
+$("sRestoreGo").addEventListener("click", async () => {
+  if (!restoreText || S.busy) return; S.busy = true; busy("Восстанавливаю из копии…");
+  try { if (SAVE.p) await SAVE.p; await window.KOSHELEK.backup.restore(restoreText); logEv("click", "restore"); location.reload(); }
+  catch (e) { S.busy = false; busy(null); $("sExportMsg").textContent = e?.message || "Не получилось восстановить."; $("sRestoreBox").hidden = true; }
+});
+document.addEventListener("toggle", ev => { if (ev.target && ev.target.id === "sDelBox" && ev.target.open) { $("sDelKeyL").hidden = !window.KOSHELEK.hasKey(); $("sDelDriveL").hidden = !window.KOSHELEK.driveOn(); } }, true);
 $("sDelWord").addEventListener("input", () => { $("sDel").disabled = $("sDelWord").value.trim().toLowerCase() !== "удалить"; });
+let alertNote = "";
 $("sDel").addEventListener("click", async () => {
   if ($("sDelWord").value.trim().toLowerCase() !== "удалить" || S.busy) return;
   S.busy = true; busy("Удаляю данные…");
@@ -11399,6 +11422,10 @@ $("sDel").addEventListener("click", async () => {
     }));
     if (fail) throw fail;
     S.saved.clear();
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* нет хранилища */ }
+    try { await window.KOSHELEK.backup.wipe({ key: $("sDelKey").checked, drive: $("sDelDrive").checked }); }
+    catch (e) { alertNote = "Данные на устройстве удалены, но копии на Google Диске удалить не получилось" + (e?.message ? ": " + e.message : "") + ". Удалите их по инструкции из политики конфиденциальности."; }
+    if (alertNote) { S.busy = false; busy(null); showErr(alertNote); setTimeout(() => location.reload(), 8000); return; }
     location.reload();
   } catch (e) { showErr(writeErr(e)); S.busy = false; busy(null); }
 });

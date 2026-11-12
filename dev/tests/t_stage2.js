@@ -1,0 +1,30 @@
+const { launch, shot, BASE, txt } = require('./lib');
+const D = '/home/claude/audit/work/data/'; const R = []; const ok = (n, c, d) => { R.push((c ? 'PASS ' : 'FAIL ') + n + (d ? ' — ' + d : '')); };
+(async () => {
+  const { browser, page, logs } = await launch({ profile: 'N2' });
+  const sleep = ms => page.waitForTimeout(ms); const dlgOpen = () => page.evaluate(() => !!document.querySelector('#kwDlg')?.open);
+  await page.goto(BASE, { waitUntil: 'load' }); await sleep(4000);
+  ok('K-05 первый экран — загрузка выписки, окна нет', !(await dlgOpen()) && /Загрузите выписку/.test(await txt(page, '#wizard', 300)));
+  ok('K-05 ссылка восстановления', await page.locator('#kwRestore').isVisible()); await shot(page, 's2_first');
+  await page.click('#kwRestore'); await sleep(500); ok('ссылка открывает «Подключения»', (await dlgOpen()) && /Подключения/.test(await txt(page, '#kwDlg', 60)));
+  await page.locator('#kwDlg').getByText('Закрыть').click(); await sleep(300);
+  await page.setInputFiles('#wFile', D + 'sw_main_2026-05_2026-10.csv'); await sleep(2500);
+  await sleep(3500); ok('окна нет на шаге 2', !(await dlgOpen()));
+  await page.click('#incSave'); await sleep(2000); await page.click('#qCoachGo'); await sleep(800);
+  const tabs = await page.$$eval('#qTabs [role=tab]', e => e.map(x => x.innerText.replace(/\s+/g, ' ')).join(' | ')); ok('K-40 нет вкладки с нулём', !/ 0(\s|$)/.test(tabs), tabs);
+  await page.click('#qTabs [data-qtab="none"]'); await sleep(400);
+  const bank = await page.$$eval('.qc-bank', e => e.map(x => x.innerText).join(' || ')); ok('K-41 строка «В банке» без маски карты', !/\*{4}/.test(bank) && /PIRKUMS NEZINAMS VEIKALS 77 RIGA LV/.test(bank), bank.slice(0, 200));
+  await sleep(3000); ok('окна нет в разборе первого запуска', !(await dlgOpen()));
+  for (const c of await page.$$('.qc-chk:not([disabled])')) await c.check();
+  await page.click('#qFootGo'); await sleep(1200); const pp = page.locator('#qPostpone'); if (await pp.isVisible()) { await pp.click(); await sleep(800); }
+  await sleep(5000); const g = await txt(page, '#kwDlg', 400);
+  ok('K-05 окно после первого запуска', (await dlgOpen()) && /Выписка загружена/.test(g) && /советуем/.test(g) && !/нужно/.test(g), g.replace(/\n/g, ' | ').slice(0, 200)); await shot(page, 's2_gate_later');
+  await page.getByText('Пропустить, настрою позже').click(); await sleep(600); ok('окно закрывается', !(await dlgOpen()));
+  await page.click('#tabs [data-tab="home"]'); await sleep(600); const h = await txt(page, '#p-home', 900);
+  ok('K-14 подтверждённое не «проверить»', !/Запасная категория/.test(h), h.replace(/\n/g, ' | ').slice(200, 420)); await shot(page, 's2_home');
+  await page.reload({ waitUntil: 'load' }); await sleep(6000); ok('окно повторно не показывается', !(await dlgOpen()));
+  const it = await page.evaluate(() => ['Skaidras naudas izmaksa 100 EUR ATM', 'Uz kontu LV80 HABA 0551 0000 0000 1 Anna', 'karte 5123 45** **** 6789 pirkums', 'PIRKUMS 4321********1234 02.10.2026 12.50 EUR (514741) RIMI RIGA LV', 'Rēķins par internetu oktobris'].map(infoTxt));
+  ok('K-21 очистка', it[0] === 'Skaidras naudas izmaksa ATM' && !/HABA|0551/.test(it[1]) && !/5123|6789/.test(it[2]) && /RIMI RIGA/.test(it[3]) && it[4] === 'Rēķins par internetu oktobris', JSON.stringify(it));
+  ok('ошибок консоли нет', !logs.filter(l => /PAGEERROR/.test(l)).length, logs.filter(l => /PAGEERROR/.test(l)).join(';').slice(0, 300));
+  console.log(R.join('\n')); await browser.close();
+})().catch(e => { console.log(R.join('\n')); console.error('FAIL', String(e).slice(0, 500)); process.exit(1); });
