@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.5 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.6 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -938,32 +938,32 @@ body.is-onb .qfoot { bottom: 8px; }
 #repFrame { flex: 1 1 auto; width: 100%; border: 1px solid var(--line); border-radius: var(--r-s); background: #fff; }
 
 /* ===== П11-1. Внешний вид по эталону 01–04: первый запуск, «Операции» (разбор), редактор, «Внести».
-   Цвета — только в светлой теме и только в этих разделах; «Главная», «Наличные», «Настройки» и меню не меняются. ===== */
+   Цвета — только в светлой теме. С П15.6 (решение владельца 12.11.2026) палитра и кнопки действуют на всех вкладках. ===== */
 :root { --accent-hover: #0a4a59; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent-hover: #86c9d8; } }
 :root[data-theme="dark"] { --accent-hover: #86c9d8; }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) :is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) {
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) body {
   --bg: #eaf2f6; --surface: #ffffff; --ink: #11192c; --muted: #697794; --line: #d9e3eb;
   --accent: #007e98; --accent-ink: #ffffff; --accent-soft: #e1f1f5; --accent-hover: #006a83;
   --r: 17px; --r-s: 12px; --shadow: 0 7px 25px rgba(24, 47, 68, .035);
   --seg: #d4dce4; --panel: #eff4f7; --fld: #f3f7fa; --fldl: #cdd9e5; --grad: linear-gradient(150deg, #058ca4, #00758e); } }
-:root[data-theme="light"] :is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) {
+:root[data-theme="light"] body {
   --bg: #eaf2f6; --surface: #ffffff; --ink: #11192c; --muted: #697794; --line: #d9e3eb;
   --accent: #007e98; --accent-ink: #ffffff; --accent-soft: #e1f1f5; --accent-hover: #006a83;
   --r: 17px; --r-s: 12px; --shadow: 0 7px 25px rgba(24, 47, 68, .035);
   --seg: #d4dce4; --panel: #eff4f7; --fld: #f3f7fa; --fldl: #cdd9e5; --grad: linear-gradient(150deg, #058ca4, #00758e); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) :is(body.is-onb, body:has(#wizard:not([hidden])), body:has(#p-q:not([hidden])), body:has(#p-in:not([hidden]))),
-  :root:not([data-theme="dark"]) :is(body.is-onb, body:has(#wizard:not([hidden])), body:has(#p-q:not([hidden])), body:has(#p-in:not([hidden])))::before { background: #eaf2f6; } }
-:root[data-theme="light"] :is(body.is-onb, body:has(#wizard:not([hidden])), body:has(#p-q:not([hidden])), body:has(#p-in:not([hidden]))),
-:root[data-theme="light"] :is(body.is-onb, body:has(#wizard:not([hidden])), body:has(#p-q:not([hidden])), body:has(#p-in:not([hidden])))::before { background: #eaf2f6; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) body,
+  :root:not([data-theme="dark"]) body::before { background: #eaf2f6; } }
+:root[data-theme="light"] body,
+:root[data-theme="light"] body::before { background: #eaf2f6; }
 
 /* общие элементы: кнопки, поля, флажки, треугольник раскрытия */
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) .btn { border-radius: 11px; font-weight: 720; }
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) .btn.primary { background: var(--grad, var(--accent)); border: 0; color: var(--accent-ink); font-weight: 750; border-radius: 12px; }
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) .btn.primary:disabled { background: #b1c9d0; color: #eaf5f7; opacity: 1; }
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) .btn:not(.primary):not(.quiet) { background: var(--surface); border: 1.5px solid var(--accent); color: var(--accent); }
-:is(body.is-onb, body:has(#wizard:not([hidden])), #p-q, #p-in) :is(select, input:not([type=checkbox]):not([type=file]), textarea) { background: var(--fld, var(--surface)); border-color: var(--fldl, var(--line)); border-radius: 10px; }
+body .btn { border-radius: 11px; font-weight: 720; }
+body .btn.primary { background: var(--grad, var(--accent)); border: 0; color: var(--accent-ink); font-weight: 750; border-radius: 12px; }
+body .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+body .btn.primary:disabled { background: #b1c9d0; color: #eaf5f7; opacity: 1; }
+body .btn:not(.primary):not(.quiet) { background: var(--surface); border: 1.5px solid var(--accent); color: var(--accent); }
+body :is(select, input:not([type=checkbox]):not([type=file]), textarea) { background: var(--fld, var(--surface)); border-color: var(--fldl, var(--line)); border-radius: 10px; }
 .linkbtn { text-decoration: none; }
 .tri::before, .wiz-set > summary::before, .inc-pur > summary::before, .qg-ops > summary::before, .hint-fold > summary::before, #p-in .up-hist > summary::before {
   content: ""; flex: none; display: inline-block; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid currentColor; margin-right: 9px; transform-origin: 3px 50%; transition: transform .16s ease; }

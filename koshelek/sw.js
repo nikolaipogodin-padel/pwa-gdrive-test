@@ -1,4 +1,4 @@
-const CACHE = "koshelek-v5";
+const CACHE = "koshelek-v6";
 const SHELL = ["./", "./index.html", "./config.js", "./platform.js", "./manifest.webmanifest", "./icon-192.png?v=1", "./icon-512.png?v=1"];
 const EXT = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|cdnjs\.cloudflare\.com)\//;
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => Promise.all(SHELL.map(u => fetch(new Request(u, { cache: "reload" })).then(r => { if (!r.ok) throw new Error(u); return c.put(u, r); })))).then(() => self.skipWaiting())); });
