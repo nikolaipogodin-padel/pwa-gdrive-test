@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П15.9 · 12.11.2026";
+const BUILD = "П15.10 · 13.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
@@ -335,7 +335,7 @@ const css = `
 #kwPill{position:fixed;z-index:60;top:calc(env(safe-area-inset-top,0px) + 6px);right:8px;height:30px;min-width:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line,#dfe4e9);background:var(--surface,#fff);color:var(--muted,#5b6873);font:600 .78rem var(--f,system-ui);display:inline-flex;align-items:center;gap:6px;cursor:pointer;box-shadow:0 1px 3px rgb(0 0 0/.12)}
 #kwPill i{width:9px;height:9px;border-radius:50%;background:var(--muted,#888);display:inline-block}
 #kwPill.ok i{background:var(--ok,#2f7a4a)}#kwPill.sync i,#kwPill.pending i{background:var(--warn,#8a5d00)}#kwPill.error i,#kwPill.conflict i,#kwPill.login i{background:var(--bad,#a83a2c)}
-#kwPill{padding:0;justify-content:center}#kwPill span{display:none}
+#kwPill{padding:0;justify-content:center}#kwPill::after{content:"";position:absolute;inset:-7px}#kwPill span{display:none}
 #kwDlg{border:0;border-radius:20px;background:var(--surface,#fff);color:var(--ink,#14212b);width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 32px);padding:0;overflow:auto;box-shadow:0 20px 60px rgb(0 0 0/.3);font:15px/1.45 var(--f,system-ui)}
 #kwDlg::backdrop{background:rgb(10 20 26/.55)}
 @media(max-width:719px){#kwDlg{width:100vw;max-width:100vw;margin:auto 0 0;border-radius:20px 20px 0 0;max-height:92vh}}

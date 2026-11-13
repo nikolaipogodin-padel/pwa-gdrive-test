@@ -1,12 +1,12 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <title>Кошелёк</title>
-<meta name="theme-color" content="#0d5c6e">
+<meta name="theme-color" content="#007e98" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0d5c6e" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Кошелёк">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.9 · 12.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.10 · 13.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -285,6 +285,7 @@ dialog::backdrop { background: rgb(10 20 26 / .45); }
 @media (max-width: 719px) { #hdrMonth { justify-content: flex-end; } #hdrMonth #fcSub { display: none; } #hdrMonth .mnav-b { width: 30px; } #hdrMonth .mnav h2 { font-size: var(--fs-m); } .head #updated { font-size: var(--fs-s); } }
 .mnav-b { font: inherit; font-size: 1.5rem; font-weight: 700; line-height: 1; width: 40px; height: 40px; border-radius: 999px; border: 0; background: var(--accent-soft); color: var(--accent); cursor: pointer; position: relative; }
 .mnav-b::after { content: ""; position: absolute; inset: -5px -3px; }
+@media (max-width: 719px) { #hdrMonth .mnav-b::after { inset: -5px -7px; } }
 .mnav-b:hover { background: var(--accent); color: var(--accent-ink); }
 .mnav-b:disabled { color: var(--muted); opacity: .35; cursor: default; background: transparent; }
 .takeaway { margin: 0; font-size: var(--fs-m); line-height: 1.5; text-wrap: pretty; }
@@ -7786,11 +7787,12 @@ RENDER.ops = function () {
   const parts = []; if (posC >= 0.005) parts.push(`потрачено ${eur(posC)} €`); if (negC >= 0.005) parts.push(`вернулось ${eur(negC)} €`); if (got >= 0.005) parts.push(`поступило ${eur(got)} €`);
   const sumTxt = t === "Доход" ? ` · поступило ${eur(got)} €` : t === "Возврат" ? ` · вернулось ${eur(back)} €` : parts.length ? " · " + parts.join(" · ") : t !== "Перемещение" ? " · потрачено 0,00 €" : "";
   // по дням: заголовок дня с итогом (по всем операциям дня, а не только показанным)
+  const dayCnt = new Map(); for (const o of ops) dayCnt.set(o.d, (dayCnt.get(o.d) || 0) + 1);   // П15.10: сумма дня — только если операций больше одной
   const dayTot = new Map(); for (const o of ops) dayTot.set(o.d, (dayTot.get(o.d) || 0) + (t === "Доход" ? (o.t === "Доход" ? fin(o.a) : 0) : t === "Возврат" ? (isRefund(o) ? fin(o.a) : 0) : -costOf(o) + (o.t === "Доход" ? fin(o.a) : 0)));   // итог дня со знаком, как в строках: траты −, возвраты и доход +
   let lastD = "", html = "";
   if (incV) html = "";
   else for (const o of shown) {
-    if (o.d !== lastD) { lastD = o.d; const v = dayTot.get(o.d) || 0; html += `<div class="op-day"><span>${dayTitle(o.d)}</span>${Math.abs(v) >= 0.005 ? `<span class="num">${v > 0 ? "+" : "−"}${eur(Math.abs(v))}</span>` : ""}</div>`; }
+    if (o.d !== lastD) { lastD = o.d; const v = dayTot.get(o.d) || 0; html += `<div class="op-day"><span>${dayTitle(o.d)}</span>${Math.abs(v) >= 0.005 && dayCnt.get(o.d) > 1 ? `<span class="num">${v > 0 ? "+" : "−"}${eur(Math.abs(v))}</span>` : ""}</div>`; }
     html += opRow(o, t === "auto");
   }
   $("opsList").hidden = incV && ops.length > 0;
