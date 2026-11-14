@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.11 · 14.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.12 · 14.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -1315,7 +1315,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 #alerts .al .go{flex:none;min-height:30px;padding:4px 12px}
 /* П15.11: раскрытая статья на «Главной» — объёмная карточка, «выходит вперёд» */
 .cat:has(> .cat-btn[aria-expanded="true"]) {
-  --lift: 0 1px 0 rgb(255 255 255 / .95) inset, 0 -1px 0 rgb(20 33 43 / .06) inset, 0 3px 6px rgb(20 33 43 / .12), 0 14px 28px rgb(20 33 43 / .2), 0 30px 50px -16px rgb(13 92 110 / .45);
+  --lift: 0 1px 0 rgb(255 255 255 / .95) inset, 0 -1px 0 rgb(20 33 43 / .06) inset, 0 -4px 10px rgb(20 33 43 / .10), 0 -12px 24px -6px rgb(20 33 43 / .14), 0 3px 6px rgb(20 33 43 / .12), 0 14px 28px rgb(20 33 43 / .2), 0 30px 50px -16px rgb(13 92 110 / .45);
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 55%, #fff) 0%, var(--bg) 120px) !important;
   position: relative; z-index: 2; margin: 16px -10px; padding: 0 20px;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-top-color: color-mix(in srgb, var(--accent) 12%, #fff);
@@ -1325,14 +1325,22 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 @keyframes catLift { from { transform: translateY(0) scale(.985); box-shadow: none; } to { transform: translateY(-3px); box-shadow: var(--lift); } }
 @media (prefers-reduced-motion: reduce) { .cat:has(> .cat-btn[aria-expanded="true"]) { animation: none; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cat:has(> .cat-btn[aria-expanded="true"]) {
-  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 -6px 16px rgb(0 0 0 / .45), 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
   background: linear-gradient(180deg, #24313b 0%, #1e2a33 140px) !important; border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); } }
 :root[data-theme="dark"] .cat:has(> .cat-btn[aria-expanded="true"]) {
-  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 -6px 16px rgb(0 0 0 / .45), 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
   background: linear-gradient(180deg, #24313b 0%, #1e2a33 140px) !important; border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 :root[data-theme="dark"] .cat:has(> .cat-btn[aria-expanded="true"]) .cat-det :is(.plan, .hist) { background: var(--bg); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cat:has(> .cat-btn[aria-expanded="true"]) .cat-det :is(.plan, .hist) { background: var(--bg); } }
 .cat:has(> .cat-btn[aria-expanded="true"]) + .cat { border-top-color: transparent; }
+/* П15.12: строка раскрытой статьи — сплошная полоса на всю ширину карточки */
+.cat:has(> .cat-btn[aria-expanded="true"]) > .cat-btn, .cat:has(> .cat-btn[aria-expanded="true"]) > .cat-btn:hover {
+  width: calc(100% + 40px) !important; margin: -1px -20px 0 !important; padding: 12px 20px 11px !important;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface)) !important; border-radius: 16px 16px 0 0 !important;
+  border-bottom: 2px solid var(--accent) !important; box-shadow: 0 1px 0 rgb(255 255 255 / .6) inset; }
+.cat:has(> .cat-btn[aria-expanded="true"]) > .cat-btn .cat-name { color: var(--accent); }
+.cat:has(> .cat-btn[aria-expanded="true"]) > .cat-btn .cat-val { color: var(--ink); }
+.cat:has(> .cat-btn[aria-expanded="true"]) { overflow: hidden; }
 </style>
 
 <div class="wrap">
