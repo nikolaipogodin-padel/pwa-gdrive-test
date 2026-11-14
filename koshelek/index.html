@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.10 · 13.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.11 · 14.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -1313,6 +1313,26 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
 
 #alerts .al{flex-wrap:nowrap;padding:6px 10px 6px 12px;gap:8px;font-size:var(--fs-s);line-height:1.25}
 #alerts .al .go{flex:none;min-height:30px;padding:4px 12px}
+/* П15.11: раскрытая статья на «Главной» — объёмная карточка, «выходит вперёд» */
+.cat:has(> .cat-btn[aria-expanded="true"]) {
+  --lift: 0 1px 0 rgb(255 255 255 / .95) inset, 0 -1px 0 rgb(20 33 43 / .06) inset, 0 3px 6px rgb(20 33 43 / .12), 0 14px 28px rgb(20 33 43 / .2), 0 30px 50px -16px rgb(13 92 110 / .45);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 55%, #fff) 0%, var(--bg) 120px) !important;
+  position: relative; z-index: 2; margin: 16px -10px; padding: 0 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-top-color: color-mix(in srgb, var(--accent) 12%, #fff);
+  border-radius: 16px; box-shadow: var(--lift); transform: translateY(-3px);
+  animation: catLift .22s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes catLift { from { transform: translateY(0) scale(.985); box-shadow: none; } to { transform: translateY(-3px); box-shadow: var(--lift); } }
+@media (prefers-reduced-motion: reduce) { .cat:has(> .cat-btn[aria-expanded="true"]) { animation: none; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cat:has(> .cat-btn[aria-expanded="true"]) {
+  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  background: linear-gradient(180deg, #24313b 0%, #1e2a33 140px) !important; border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); } }
+:root[data-theme="dark"] .cat:has(> .cat-btn[aria-expanded="true"]) {
+  --lift: 0 1px 0 rgb(255 255 255 / .06) inset, 0 2px 6px rgb(0 0 0 / .5), 0 14px 32px rgb(0 0 0 / .55), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  background: linear-gradient(180deg, #24313b 0%, #1e2a33 140px) !important; border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+:root[data-theme="dark"] .cat:has(> .cat-btn[aria-expanded="true"]) .cat-det :is(.plan, .hist) { background: var(--bg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cat:has(> .cat-btn[aria-expanded="true"]) .cat-det :is(.plan, .hist) { background: var(--bg); } }
+.cat:has(> .cat-btn[aria-expanded="true"]) + .cat { border-top-color: transparent; }
 </style>
 
 <div class="wrap">
@@ -7083,7 +7103,7 @@ function catDetail(r, f, k) {
     if (ops.length) h += subTree(ops);
     if (ops.length) {
       h += `<div><p class="det-h">Крупнейшие траты месяца</p><div class="ops">${ops.slice(0, 5).map(o => `<button class="op cmp" type="button" data-id="${esc(o.id)}"><span class="d num">${fmtDate(o.d)}</span><span class="cp">${esc(cpText(o) || o.s)}${isManual(o) ? ' <span class="chip edit">предв.</span>' : ""}</span><span class="amt num">${eur(costOf(o))}</span></button>`).join("")}</div>
-        <div class="det-act"><button class="linkbtn" type="button" data-grp="${esc(r.big)}">Все операции статьи (${ops.length})</button></div></div>`;
+        ${ops.length > 5 ? `<div class="det-act"><button class="linkbtn" type="button" data-grp="${esc(r.big)}">Все операции статьи (${ops.length})</button></div>` : ""}</div>`;   // П15.11: ссылка — только если есть что раскрыть сверх показанных 5
     }
   }
   return h;

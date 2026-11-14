@@ -20,7 +20,7 @@ const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
 try { const d = +localStorage.getItem("kw_delay"); if (d > 0) CFG.syncDelayMs = d; } catch (e) { }
 const TAB = Math.random().toString(36).slice(2, 10);
-const BUILD = "П15.10 · 13.11.2026";
+const BUILD = "П15.11 · 14.11.2026";
 let editSeq = 0;   // П13.5: счётчик правок — отправка не сбрасывает «несохранённое», если данные менялись во время неё
 const hsh = v => { const s = JSON.stringify(v) || ""; let h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };   // П13.5: отпечаток документа
 let persisted = null;   // П13 (A0.2): закреплено ли хранилище браузером
