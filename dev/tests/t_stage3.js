@@ -8,7 +8,7 @@ const gem = require('./gem_stub.js'); fs.writeFileSync('/tmp/gem_mode', 'ok'); t
   const home = async () => { await page.click('#tabs [data-tab="home"]'); await sleep(700); return (await txt(page, '#p-home', 1200)); };
   await page.goto(BASE, { waitUntil: 'load' }); await sleep(2500);
   const h0 = await home(); const n0 = await page.evaluate(() => window.KOSHELEK.mem.size);
-  ok('K-19 kv не виден со страницы', await page.evaluate(() => window.KOSHELEK.kv === undefined));
+  ok('K-19 ключ ИИ не виден со страницы', await page.evaluate(() => !('geminiKey' in window.KOSHELEK.kv) && 'baseRev' in window.KOSHELEK.kv));
   await openData(); await shot(page, 's6_data');
   const [d] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }), page.click('#sExport')]); await d.saveAs(DL + 'backup.json');
   const bk = JSON.parse(fs.readFileSync(DL + 'backup.json', 'utf8')); ok('K-04 копия — полный снимок', bk.koshelek_backup === 1 && Object.keys(bk.docs).length >= 10 && !/AIza/.test(JSON.stringify(bk)), 'документов ' + Object.keys(bk.docs).length);

@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.12 · 14.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.13 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -3366,7 +3366,9 @@ function purchaseDate(book, op) {
 }
 function matchScore(book, bankOp, pendDays) {
   const [pd, explicit] = purchaseDate(book, bankOp);
-  if (explicit) { const delta = Math.abs(pd - pendDays); return delta <= 1 ? delta : null; }
+  if (explicit) { const delta = Math.abs(pd - pendDays); if (delta <= 1) return delta;
+    const post = isoDays(bankOp.date);   // П15.13: запись датой между покупкой и проводкой банка (например, внесена днём списания) — тоже пара, но слабее точной
+    return pendDays > pd && pendDays <= post ? 1.5 + (pendDays - pd) / 10 : null; }
   const k = isoDays(bankOp.date) - pendDays;
   return k >= 0 && k <= 5 ? 2 + k / 10 : null;
 }
