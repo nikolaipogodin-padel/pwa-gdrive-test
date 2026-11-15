@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.13 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.14 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -1830,7 +1830,7 @@ body.is-learn #learnCard .btn:not(.primary) { border: 1.5px solid var(--accent);
     <div class="desc" id="lkWhat"></div>
     <div class="ops" id="lkList"></div>
     <div class="note" id="lkMsg"></div>
-    <div class="row"><button type="button" class="btn" id="lkCancel">Отмена</button><button type="submit" class="btn primary" id="lkSave" disabled>Связать</button></div>
+    <div class="row"><button type="button" class="btn" id="lkCancel">Отмена</button><button type="button" class="btn" id="lkDup" hidden>Удалить повтор</button><button type="submit" class="btn primary" id="lkSave" disabled>Связать</button></div>
   </form>
 </dialog>
 
@@ -10688,16 +10688,26 @@ function openLink(id) {
   const p = S.pending[id]; if (!p) return;
   S.link = { id, pick: null };
   $("lkWhat").textContent = `${p.desc || "запись"} · ${fmtDate(p.date)} · ${eur(p.amount)} €. Выберите операцию из выписки, которой она соответствует.`;
-  const taken = new Set(Object.values(S.pending).filter(x => x.bank_id).map(x => x.bank_id));
-  const cands = allOps().filter(o => !isManual(o) && o.t !== "Перемещение" && o.a < 0 && Math.abs(-o.a - p.amount) <= 1 && Math.abs(dayDiff(p.date, o.d)) <= 10 && !taken.has(o.id))
-    .sort((a, b) => Math.abs(dayDiff(p.date, a.d)) - Math.abs(dayDiff(p.date, b.d))).slice(0, 12);
-  $("lkList").innerHTML = cands.length ? cands.map(o => `<label class="lk"><input type="radio" name="lkpick" value="${esc(o.id)}"><span><b>${esc(cpText(o).slice(0, 40))}</b><br><span class="small muted">${fmtDate(o.d)} · ${eur(o.a)} €</span></span></label>`).join("")
-    : '<div class="empty">Подходящих операций (сумма ±1 €, ±10 дней) в выписке пока нет.</div>';
+  /* П15.14: сначала — только точная сумма; если такая операция уже связана с другой записью, говорим про повтор; близкие суммы (±1 €) — отдельным списком */
+  const owner = new Map(Object.entries(S.pending).filter(([, x]) => x.bank_id).map(([pid, x]) => [x.bank_id, pid]));
+  const near = allOps().filter(o => !isManual(o) && o.t !== "Перемещение" && o.a < 0 && Math.abs(-o.a - p.amount) <= 1 && Math.abs(dayDiff(p.date, o.d)) <= 10)
+    .sort((a, b) => Math.abs(dayDiff(p.date, a.d)) - Math.abs(dayDiff(p.date, b.d)));
+  const same = o => Math.abs(-o.a - p.amount) < 0.005;
+  const exact = near.filter(o => same(o) && !owner.has(o.id)).slice(0, 12), twin = near.find(o => same(o) && owner.has(o.id) && owner.get(o.id) !== id);
+  const loose = exact.length || twin ? [] : near.filter(o => !owner.has(o.id)).slice(0, 6);
+  const row = o => `<label class="lk"><input type="radio" name="lkpick" value="${esc(o.id)}"><span><b>${esc(cpText(o).slice(0, 40))}</b><br><span class="small muted">${fmtDate(o.d)} · ${eur(o.a)} €</span></span></label>`;
+  let html = "";
+  if (exact.length) html = exact.map(row).join("");
+  else if (twin) { const q = S.pending[owner.get(twin.id)] || {}; html = `<div class="empty">В выписке есть операция на эту сумму — ${esc(cpText(twin).slice(0, 40))}, ${fmtDate(twin.d)}, — но она уже связана с вашей записью «${esc(String(q.desc || "запись").slice(0, 40))}» от ${fmtDate(q.date || twin.d)}. Похоже, эта запись — повтор.</div>`; }
+  else if (loose.length) html = `<div class="small muted" style="padding:4px 2px 8px">Операции ровно на ${eur(p.amount)} € в выписке нет. Близкие по сумме:</div>` + loose.map(row).join("");
+  else html = `<div class="empty">Операции на ${eur(p.amount)} € в выписке пока нет (смотрю ±10 дней).</div>`;
+  $("lkList").innerHTML = html; $("lkDup").hidden = !(twin && !exact.length);
   $("lkMsg").textContent = ""; $("lkSave").disabled = true;
   $("dlgLink").showModal();
 }
 $("lkList").addEventListener("change", ev => { if (ev.target.name === "lkpick") { S.link.pick = ev.target.value; $("lkSave").disabled = false; } });
 $("lkCancel").addEventListener("click", () => $("dlgLink").close());
+$("lkDup").addEventListener("click", async () => { const id = S.link?.id; $("dlgLink").close(); if (!id) return; logEv("click", "lkDup"); await act("Удаляю повтор…", () => { if (!findItem("pending", id)) return false; delItem("pending", id); reapply(); }); });
 $("lkForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   if (!S.link?.pick) return;
