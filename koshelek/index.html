@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.14 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.15 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -10361,7 +10361,12 @@ function knownManual(p) {
   const same = all.find(({ x }) => x.date === p.date);
   if (same) return Object.assign({ near: false }, same.x);
   const near = all.filter(({ x, n }) => Math.abs(dayDiff(x.date, p.date)) <= 5 && similarName(n, p.desc)).sort((a, b) => Math.abs(dayDiff(a.x.date, p.date)) - Math.abs(dayDiff(b.x.date, p.date)))[0];
-  return near ? Object.assign({ near: true }, near.x) : null;
+  if (near) return Object.assign({ near: true }, near.x);
+  /* П15.15: та же сумма в пределах 3 дней среди записей по карте (ждут выписку или уже связаны), название другое или его нет —
+     мягкая подсказка, отметка остаётся. По случаю 15.11: аптека внесена дважды, вторая запись осталась «ждать выписку» навсегда. */
+  const weak = Object.values(S.pending || {}).filter(x => amt(x) && /^\d{4}-\d{2}-\d{2}$/.test(x.date || "") && Math.abs(dayDiff(x.date, p.date)) <= 3)
+    .sort((a, b) => Math.abs(dayDiff(a.date, p.date)) - Math.abs(dayDiff(b.date, p.date)))[0];
+  return weak ? Object.assign({ near: true, weak: true }, weak) : null;
 }
 /* сумма нетипична для подстатьи: в 10 раз больше обычной (медиана, от 5 трат) и больше 20 € — «проверьте сумму» */
 function oddAmount(sub, amount) {
@@ -10389,7 +10394,7 @@ RENDER.props = function () {
     const dup = p.dupBank, dm = p.dupManual, odd = oddAmount(p.sub, p.amount);
     const subs = groups[p.group] || [];
     const warn = (dup ? `<div class="warn-line">Похоже, уже есть в выписке: ${esc(cpText(dup))} ${fmtDate(dup.d)} ${eur(dup.a)} €. Отметка снята, чтобы не задвоить.</div>`
-        : dm ? `<div class="warn-line">${dm.near ? "Похожая запись уже есть" : "Такая запись уже внесена"}: ${fmtDate(dm.date)} ${eur(dm.amount)} € ${esc(dm.desc || dm.note || "")}${dm.state === "сверено с выпиской" ? " (уже в выписке)" : ""}. ${p.on ? "Если это ещё одна трата — оставьте отметку." : "Отметка снята — если это новая трата, отметьте."}</div>`
+        : dm ? `<div class="warn-line">${dm.weak ? "На эту сумму уже есть запись" : dm.near ? "Похожая запись уже есть" : "Такая запись уже внесена"}: ${fmtDate(dm.date)} ${eur(dm.amount)} € ${esc(dm.desc || dm.note || "")}${dm.state === "сверено с выпиской" ? " (уже в выписке)" : ""}. ${p.on ? (dm.weak ? "Если это та же трата — снимите отметку." : "Если это ещё одна трата — оставьте отметку.") : "Отметка снята — если это новая трата, отметьте."}</div>`
         : p.confidence === "low" ? '<div class="warn-line">Категорию не узнал — проверьте.</div>' : "")
       + (odd != null ? `<div class="warn-line">Проверьте сумму: обычно в «${esc(p.sub)}» ≈ ${eur(odd)} €.</div>` : "")
       + (p.dateUnknown ? '<div class="warn-line">Даты на фото не видно — стоит сегодняшняя. Укажите день покупки.</div>' : "");
@@ -10561,7 +10566,7 @@ async function runIntake(useAI = false) {
     /* П11.6.5: «откуда платили» — один раз на весь ввод: пустые строки берут первый указанный счёт */
     { const first = S.props.find(p => (p.kind === "card" && p.acct) || p.kind === "cash");
       if (first) for (const p of S.props) if (p.kind === "none") { p.kind = first.kind; p.acct = first.acct || ""; }
-      for (const p of S.props) { p.dupBank = p.kind !== "cash" ? knownInBank(p, !!file) : null; p.dupManual = knownManual(p); if (p.dupBank || (p.dupManual && (!p.dupManual.near || file))) p.on = false; } }
+      for (const p of S.props) { p.dupBank = p.kind !== "cash" ? knownInBank(p, !!file) : null; p.dupManual = knownManual(p); if (p.dupBank || (p.dupManual && (!p.dupManual.near || (file && !p.dupManual.weak)))) p.on = false; } }
     $("inMsg").className = "small muted";
     $("inMsg").textContent = S.props.length ? `Найдено: ${pl(S.props.length, "запись", "записи", "записей")}. Проверьте и сохраните.` : "ИИ не нашёл трат в этом вводе.";
     draw("props");
