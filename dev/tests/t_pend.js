@@ -3,6 +3,7 @@ const D = '/home/claude/audit/work/data/'; const R = []; const ok = (n, c, d) =>
 (async () => {
   const { browser, page, logs } = await launch({ profile: process.argv[2] || 'M2' });
   const sleep = ms => page.waitForTimeout(ms);
+  await page.clock.install({ time: new Date('2026-11-15T12:00:00') });   // даты в pend_*.csv привязаны к 15.11.2026
   await page.goto(BASE, { waitUntil: 'load' }); await sleep(2500);
   await page.setInputFiles('#wFile', D + 'pend_a.csv'); await sleep(2500);
   await page.locator('#incList input[type=checkbox]').first().check(); await page.click('#incSave'); await sleep(2000);

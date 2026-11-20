@@ -20,7 +20,7 @@ const D = '/home/claude/audit/work/data/'; const R = []; const ok = (n, c, d) =>
   await page.click('#propSave'); await sleep(1500);
   // тот же день, та же сумма — прежнее поведение: отметка снята
   await enter('лекарства 9,69'); let w = await warn();
-  ok('тот же день: «уже внесена», отметка снята', /Такая запись уже внесена/.test(w) && !(await page.locator('#propList input[type=checkbox]').first().isChecked()), w);
+  ok('тот же день, набрано вручную: подсказка, отметка остаётся (П15.16)', /Такая запись уже внесена/.test(w) && /снимите отметку/.test(w) && await page.locator('#propList input[type=checkbox]').first().isChecked() && !(await page.locator('#propSave').isDisabled()), w);
   // другая дата (2 дня назад), другое название — новое мягкое предупреждение, отметка остаётся
   await page.fill('#pd0', iso(2)); await page.locator('#pd0').dispatchEvent('change'); await sleep(700); w = await warn();
   const chk = page.locator('#propList input[type=checkbox]').first(); if (!(await chk.isChecked())) await chk.check(); await sleep(300); await page.fill('#pd0', iso(1)); await page.locator('#pd0').dispatchEvent('change'); await sleep(700); w = await warn();

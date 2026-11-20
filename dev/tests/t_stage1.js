@@ -49,7 +49,7 @@ const D = '/home/claude/audit/work/data/'; const R = []; const ok = (n, c, d) =>
   await page.click('#aiTest'); await sleep(2500); t = await txt(page, '#aiTestOut'); ok('K-11 понятный текст', /ИИ не подключён|Ключ Gemini не принят/.test(t) && !/Claude/.test(t), t);
   ok('K-16 ссылки в «О программе»', await page.locator('#saAbout a[href="../privacy.html"]').count() === 1);
   await page.click('#kwPill'); await sleep(500); ok('K-16 ссылки в «Подключениях»', await page.locator('#kwDlg a[href="../privacy.html"]').count() === 1); await shot(page, 's1_conn');
-  ok('метка сборки', /П15\.15/.test(await page.evaluate(() => window.KOSHELEK.build)), await page.evaluate(() => window.KOSHELEK.build));
+  ok('метка сборки', /П15\.16/.test(await page.evaluate(() => window.KOSHELEK.build)), await page.evaluate(() => window.KOSHELEK.build));
   ok('плашка «разные версии» не показана', await page.evaluate(() => { const e = document.querySelector('#kwStale'); return !e || e.hidden || getComputedStyle(e).display === 'none'; }));
   for (const u of ['../privacy.html', '../about.html', '../']) { const r = await page.request.get(new URL(u, BASE).href); ok('страница ' + u, r.status() === 200); }
   await ctx.setOffline(true); let off = true; try { await page.reload({ waitUntil: 'load', timeout: 15000 }); } catch (e) { off = false; } await sleep(2000);

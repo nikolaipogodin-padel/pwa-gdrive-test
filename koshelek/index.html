@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=1"><link rel="apple-touch-icon" href="icon-192.png?v=1">
 </head><body>
-<script>window.KW_INDEX_BUILD="П15.15 · 15.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
+<script>window.KW_INDEX_BUILD="П15.16 · 20.11.2026";</script><script src="config.js"></script><script src="platform.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
@@ -9715,7 +9715,7 @@ async function cashAI() {
       msg.textContent = p.low ? "Категорию не уверен — выберите и нажмите «Добавить»." : `${p.group} / ${p.sub}. Проверьте и нажмите «Добавить».`;
     } else {
       S.props = items.map(p => { const g = p.group || (groups["Прочие расходы"] ? "Прочие расходы" : Object.keys(groups)[0]), sub = (groups[g] || []).includes(p.sub) ? p.sub : (groups[g] || [])[0];
-        const r = { date: p.date, amount: p.amount, desc: p.desc, kind: "cash", group: g, sub, confidence: p.low ? "low" : "high", on: true, acct: "" }; r.dupManual = knownManual(r); if (r.dupManual && !r.dupManual.near) r.on = false; return r; });
+        const r = { date: p.date, amount: p.amount, desc: p.desc, kind: "cash", group: g, sub, confidence: p.low ? "low" : "high", on: true, acct: "" }; r.dupManual = knownManual(r); return r; });
       $("cNote").value = ""; $("cAmt").value = ""; msg.textContent = "";
       draw("props"); $("t-in").click();
       $("inMsg").className = "small muted"; $("inMsg").textContent = `Найдено: ${pl(S.props.length, "запись", "записи", "записей")} наличными. Проверьте и сохраните.`;
@@ -10393,8 +10393,8 @@ RENDER.props = function () {
   $("propList").innerHTML = S.props.map((p, i) => {
     const dup = p.dupBank, dm = p.dupManual, odd = oddAmount(p.sub, p.amount);
     const subs = groups[p.group] || [];
-    const warn = (dup ? `<div class="warn-line">Похоже, уже есть в выписке: ${esc(cpText(dup))} ${fmtDate(dup.d)} ${eur(dup.a)} €. Отметка снята, чтобы не задвоить.</div>`
-        : dm ? `<div class="warn-line">${dm.weak ? "На эту сумму уже есть запись" : dm.near ? "Похожая запись уже есть" : "Такая запись уже внесена"}: ${fmtDate(dm.date)} ${eur(dm.amount)} € ${esc(dm.desc || dm.note || "")}${dm.state === "сверено с выпиской" ? " (уже в выписке)" : ""}. ${p.on ? (dm.weak ? "Если это та же трата — снимите отметку." : "Если это ещё одна трата — оставьте отметку.") : "Отметка снята — если это новая трата, отметьте."}</div>`
+    const warn = (dup ? `<div class="warn-line">Похоже, уже есть в выписке: ${esc(cpText(dup))} ${fmtDate(dup.d)} ${eur(dup.a)} €. ${p.on ? "Если это та же покупка — снимите отметку." : "Отметка снята, чтобы не задвоить."}</div>`
+        : dm ? `<div class="warn-line">${dm.weak ? "На эту сумму уже есть запись" : dm.near ? "Похожая запись уже есть" : "Такая запись уже внесена"}: ${fmtDate(dm.date)} ${eur(dm.amount)} € ${esc(dm.desc || dm.note || "")}${dm.state === "сверено с выпиской" ? " (уже в выписке)" : ""}. ${p.on ? (dm.weak || !dm.near ? "Если это та же трата — снимите отметку." : "Если это ещё одна трата — оставьте отметку.") : "Отметка снята — если это новая трата, отметьте."}</div>`
         : p.confidence === "low" ? '<div class="warn-line">Категорию не узнал — проверьте.</div>' : "")
       + (odd != null ? `<div class="warn-line">Проверьте сумму: обычно в «${esc(p.sub)}» ≈ ${eur(odd)} €.</div>` : "")
       + (p.dateUnknown ? '<div class="warn-line">Даты на фото не видно — стоит сегодняшняя. Укажите день покупки.</div>' : "");
@@ -10518,7 +10518,7 @@ async function runIntake(useAI = false) {
       const g = groups[x.group] ? x.group : (groups["Прочие расходы"] ? "Прочие расходы" : Object.keys(groups)[0]), sub = (groups[g] || []).includes(x.sub) ? x.sub : (groups[g] || [])[0];
       const p = Object.assign({}, x, { group: g, sub, on: true, acct: x.kind === "cash" ? "" : (lastAcct() === "cash" ? primaryAcct() : lastAcct()) });
       delete p.card;
-      p.dupBank = p.kind !== "cash" ? knownInBank(p) : null; p.dupManual = knownManual(p); if (p.dupBank || (p.dupManual && !p.dupManual.near)) p.on = false;
+      p.dupBank = p.kind !== "cash" ? knownInBank(p) : null; p.dupManual = knownManual(p);
       return p;
     });
     const low = S.props.filter(p => p.confidence === "low").length;
@@ -10566,7 +10566,7 @@ async function runIntake(useAI = false) {
     /* П11.6.5: «откуда платили» — один раз на весь ввод: пустые строки берут первый указанный счёт */
     { const first = S.props.find(p => (p.kind === "card" && p.acct) || p.kind === "cash");
       if (first) for (const p of S.props) if (p.kind === "none") { p.kind = first.kind; p.acct = first.acct || ""; }
-      for (const p of S.props) { p.dupBank = p.kind !== "cash" ? knownInBank(p, !!file) : null; p.dupManual = knownManual(p); if (p.dupBank || (p.dupManual && (!p.dupManual.near || (file && !p.dupManual.weak)))) p.on = false; } }
+      for (const p of S.props) { p.dupBank = p.kind !== "cash" ? knownInBank(p, !!file) : null; p.dupManual = knownManual(p); if (file && (p.dupBank || (p.dupManual && !p.dupManual.weak))) p.on = false; } }
     $("inMsg").className = "small muted";
     $("inMsg").textContent = S.props.length ? `Найдено: ${pl(S.props.length, "запись", "записи", "записей")}. Проверьте и сохраните.` : "ИИ не нашёл трат в этом вводе.";
     draw("props");

@@ -6,6 +6,7 @@ const gem = require('./gem_stub.js'); fs.writeFileSync('/tmp/gem_mode', 'ok'); t
   const sleep = ms => page.waitForTimeout(ms);
   const openData = async () => { await page.click('#tabs [data-tab="set"]'); await sleep(400); await page.evaluate(() => { document.querySelector('#saData').open = true; }); await sleep(300); };
   const home = async () => { await page.click('#tabs [data-tab="home"]'); await sleep(700); return (await txt(page, '#p-home', 1200)); };
+  await page.clock.install({ time: new Date('2026-11-15T12:00:00') });   // профиль B_base создан 12.11: позже полоса «Данные только на телефоне» перекрывает кнопки
   await page.goto(BASE, { waitUntil: 'load' }); await sleep(2500);
   const h0 = await home(); const n0 = await page.evaluate(() => window.KOSHELEK.mem.size);
   ok('K-19 ключ ИИ не виден со страницы', await page.evaluate(() => !('geminiKey' in window.KOSHELEK.kv) && 'baseRev' in window.KOSHELEK.kv));
